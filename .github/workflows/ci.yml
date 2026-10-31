@@ -1,0 +1,39 @@
+name: Verify career agent
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      APP_MODE: local
+      ENABLE_TEST_EMPLOYER: "true"
+      LATEX_MODE: docker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - run: npx playwright install --with-deps chromium
+      - run: docker build -f workers/latex/Dockerfile -t career-latex:local .
+      - run: npm run typecheck
+      - run: npm test
+        env:
+          RUN_LATEX_TESTS: "1"
+      - run: npm run test:e2e:local
+      - run: npm run build
+      - run: npm audit --audit-level=high
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: diagnostic-results
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

@@ -1,0 +1,30 @@
+# Dedicated trusted worker host only. Never expose the Docker socket to the web.
+# The same absolute COMPILE_ROOT path must exist on the host and in the worker,
+# since the host daemon mounts individual job directories into compiler containers.
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      APP_MODE: supabase
+      NODE_ENV: production
+      LATEX_MODE: docker
+      TMPDIR: ${COMPILE_ROOT:?Set an absolute private compile directory}
+    group_add:
+      - ${DOCKER_GID:?Set the host Docker socket group id}
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+      - type: bind
+        source: ${COMPILE_ROOT}
+        target: ${COMPILE_ROOT}
+  compiler-image:
+    profiles: [tools]
+    image: career-latex:local
+    build:
+      context: .
+      dockerfile: workers/latex/Dockerfile

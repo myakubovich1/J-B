@@ -1,0 +1,16 @@
+# This image contains the trusted Node/browser worker. It is distinct from the
+# no-network, non-root compiler image built by workers/latex/Dockerfile.
+FROM node:24-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates poppler-utils docker.io && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+RUN npx playwright install --with-deps chromium
+COPY src ./src
+COPY workers ./workers
+COPY templates ./templates
+COPY tsconfig.json ./tsconfig.json
+RUN mkdir -p /app/.data && chown -R node:node /app
+ENV NODE_ENV=production APP_MODE=supabase LATEX_MODE=docker
+USER node
+CMD ["node_modules/.bin/tsx", "workers/main.ts"]
