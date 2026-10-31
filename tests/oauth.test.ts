@@ -33,7 +33,7 @@ describe("OAuth protocol boundaries (provider HTTP fixture)", () => {
       state = url.searchParams.get("state")!;
     expect(url.origin).toBe("https://github.com");
     expect(url.searchParams.get("scope")).toContain("repo");
-    const cookie = JSON.parse(jar.get("waypoint_oauth")!),
+    const cookie = JSON.parse(jar.get("jb_oauth")!),
       saved = JSON.parse((await getSecret(user, cookie.ref))!);
     expect(url.searchParams.get("code_challenge")).toBe(
       createHash("sha256").update(saved.verifier).digest("base64url"),

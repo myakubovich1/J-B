@@ -16,7 +16,7 @@ try {
 const directory = path.resolve(".data", "e2e", crypto.randomUUID());
 await mkdir(directory, { recursive: true });
 // Separate build output avoids Next's development lock and leaves an open user preview running.
-const checkout = await mkdtemp(path.join(os.tmpdir(), "waypoint-e2e-"));
+const checkout = await mkdtemp(path.join(os.tmpdir(), "jb-e2e-"));
 for (const name of [
   "src",
   "scripts",

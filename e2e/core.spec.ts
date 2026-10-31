@@ -9,6 +9,9 @@ async function workspace(request: APIRequestContext): Promise<Workspace> {
 }
 async function register(page: Page, suffix: string) {
   await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("On autopilot.");
+  await page.getByRole("link", { name: "Get started", exact: true }).click();
+  await expect(page).toHaveURL(/\/signup$/);
   await page.getByLabel("Your name", { exact: true }).fill("Alex Fixture");
   await page.getByLabel("Email address", { exact: true }).fill(`career-${suffix}@example.test`);
   await page.getByLabel(/^Password/).fill("Fixture-password-2026!");
@@ -159,8 +162,8 @@ test("onboarding → selected LaTeX template → approved browser submission →
     .getByRole("button", { name: "Settings & Billing", exact: true })
     .click();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Create your workspace", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Get started", exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
+  await page.goto("/signin");
+  await expect(page.getByRole("button", { name: "Sign in", exact: true }).last()).toBeVisible();
 });

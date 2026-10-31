@@ -38,7 +38,7 @@ export const builtInTemplates: TemplateDefinition[] = [
     name: "Technical minimal",
     description: "A clean sans-serif layout that puts engineering work and projects first.",
     track: "software",
-    license: "MIT · Career Agent",
+    license: "MIT · J*B",
     custom: false,
   },
   {
@@ -46,7 +46,7 @@ export const builtInTemplates: TemplateDefinition[] = [
     name: "Finance professional",
     description: "Traditional serif typography and a focused education-first structure.",
     track: "finance",
-    license: "MIT · Career Agent",
+    license: "MIT · J*B",
     custom: false,
   },
   {
@@ -54,7 +54,7 @@ export const builtInTemplates: TemplateDefinition[] = [
     name: "Consulting professional",
     description: "A restrained layout for analytical experience and measurable accomplishments.",
     track: "consulting",
-    license: "MIT · Career Agent",
+    license: "MIT · J*B",
     custom: false,
   },
   {
@@ -62,7 +62,7 @@ export const builtInTemplates: TemplateDefinition[] = [
     name: "Product management",
     description: "A modern, readable layout emphasizing product work and individual contribution.",
     track: "product",
-    license: "MIT · Career Agent",
+    license: "MIT · J*B",
     custom: false,
   },
   {
@@ -70,7 +70,7 @@ export const builtInTemplates: TemplateDefinition[] = [
     name: "General ATS-friendly",
     description: "Simple headings and a single reading order for broad application compatibility.",
     track: "general",
-    license: "MIT · Career Agent",
+    license: "MIT · J*B",
     custom: false,
   },
 ];
@@ -393,6 +393,83 @@ export function validateCustomTemplate(source: string): string[] {
   return errors;
 }
 
+type TemplateStyle = {
+  sans: boolean;
+  heading: string;
+  upper: boolean;
+  rule: boolean;
+  thinRule?: boolean;
+  align: "center" | "left";
+  order: "education" | "experience";
+  margin: string;
+  spacing: string;
+};
+const templateStyles: Record<string, TemplateStyle> = {
+  jakes: {
+    sans: false,
+    heading: "\\large\\scshape",
+    upper: false,
+    rule: true,
+    align: "center",
+    order: "education",
+    margin: "0.65in",
+    spacing: "9pt",
+  },
+  technical: {
+    sans: true,
+    heading: "\\large\\bfseries",
+    upper: false,
+    rule: false,
+    align: "left",
+    order: "experience",
+    margin: "0.6in",
+    spacing: "8pt",
+  },
+  finance: {
+    sans: false,
+    heading: "\\normalsize\\bfseries",
+    upper: true,
+    rule: true,
+    thinRule: true,
+    align: "center",
+    order: "education",
+    margin: "0.75in",
+    spacing: "8pt",
+  },
+  consulting: {
+    sans: false,
+    heading: "\\normalsize\\bfseries",
+    upper: false,
+    rule: true,
+    thinRule: true,
+    align: "left",
+    order: "education",
+    margin: "0.7in",
+    spacing: "10pt",
+  },
+  product: {
+    sans: true,
+    heading: "\\normalsize\\bfseries",
+    upper: true,
+    rule: true,
+    thinRule: true,
+    align: "left",
+    order: "experience",
+    margin: "0.7in",
+    spacing: "9pt",
+  },
+  general: {
+    sans: true,
+    heading: "\\large\\bfseries",
+    upper: false,
+    rule: false,
+    align: "center",
+    order: "education",
+    margin: "0.75in",
+    spacing: "10pt",
+  },
+};
+
 export function renderLatex(
   content: ResumeContent,
   templateId: string,
@@ -418,9 +495,16 @@ export function renderLatex(
   }
   if (!builtInTemplates.some((x) => x.id === templateId))
     throw new Error("Unknown resume template.");
-  const sans = ["technical", "product", "general"].includes(templateId);
-  const rule = ["jakes", "finance", "consulting"].includes(templateId);
-  const firstExperience = ["technical", "product"].includes(templateId);
+  // Each built-in template is a distinct, single-column, ATS-readable layout.
+  const style = templateStyles[templateId];
+  const { sans, rule } = style;
+  const firstExperience = style.order === "experience";
+  const heading = `\\titleformat{\\section}{${style.heading}}{}{0pt}{${style.upper ? "\\MakeUppercase" : ""}}${rule ? `[{\\titlerule${style.thinRule ? "[0.4pt]" : ""}}]` : ""}`;
+  const header =
+    style.align === "center"
+      ? // Names keep the user's casing so ATS name matching sees exactly what they typed.
+        `\\begin{center}\n{\\LARGE\\bfseries ${esc(content.name)}}\\\\[5pt]\n{\\small ${s.contact}}\n\\end{center}`
+      : `{\\LARGE\\bfseries ${esc(content.name)}}\\\\[3pt]\n{\\small ${s.contact}}\\\\[-2pt]\n\\rule{\\linewidth}{0.8pt}`;
   const body = [
     s.summary,
     ...(firstExperience
@@ -430,8 +514,8 @@ export function renderLatex(
   ]
     .filter(Boolean)
     .join("\n\n");
-  return `${templateId === "jakes" ? '% MIT License\n% \n% Copyright (c) 2020 Jake Gutierrez\n% \n% Permission is hereby granted, free of charge, to any person obtaining a copy\n% of this software and associated documentation files (the "Software"), to deal\n% in the Software without restriction, including without limitation the rights\n% to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n% copies of the Software, and to permit persons to whom the Software is\n% furnished to do so, subject to the following conditions:\n% \n% The above copyright notice and this permission notice shall be included in all\n% copies or substantial portions of the Software.\n% \n% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n% IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n% FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n% AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n% SOFTWARE.\n' : ""}% Structured resume; profile values escaped.\n% ${templateId === "jakes" ? "Adapted from Jake Gutierrez, https://github.com/jakegut/resume (MIT); see templates/LICENSE-JAKES." : "Copyright (c) Career Agent contributors, MIT."}\n\\documentclass[letterpaper,11pt]{article}
-\\usepackage[margin=0.65in]{geometry}
+  return `${templateId === "jakes" ? '% MIT License\n% \n% Copyright (c) 2020 Jake Gutierrez\n% \n% Permission is hereby granted, free of charge, to any person obtaining a copy\n% of this software and associated documentation files (the "Software"), to deal\n% in the Software without restriction, including without limitation the rights\n% to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n% copies of the Software, and to permit persons to whom the Software is\n% furnished to do so, subject to the following conditions:\n% \n% The above copyright notice and this permission notice shall be included in all\n% copies or substantial portions of the Software.\n% \n% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n% IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n% FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n% AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n% SOFTWARE.\n' : ""}% Structured resume; profile values escaped.\n% ${templateId === "jakes" ? "Adapted from Jake Gutierrez, https://github.com/jakegut/resume (MIT); see templates/LICENSE-JAKES." : "Copyright (c) J*B contributors, MIT."}\n\\documentclass[letterpaper,11pt]{article}
+\\usepackage[margin=${style.margin}]{geometry}
 \\usepackage{fontspec}
 \\setmainfont{lmroman10-regular.otf}[BoldFont=lmroman10-bold.otf,ItalicFont=lmroman10-italic.otf,BoldItalicFont=lmroman10-bolditalic.otf]
 \\setsansfont{lmsans10-regular.otf}[BoldFont=lmsans10-bold.otf,ItalicFont=lmsans10-oblique.otf,BoldItalicFont=lmsans10-boldoblique.otf]
@@ -443,14 +527,11 @@ export function renderLatex(
 \\setlength{\\parskip}{2pt}
 \\setlength{\\emergencystretch}{3em}
 \\setlist[itemize]{leftmargin=1.2em,itemsep=1pt,topsep=3pt,parsep=0pt}
-\\titleformat{\\section}{\\large\\${rule ? "scshape" : "bfseries"}}{}{0pt}{}${rule ? "[\\titlerule]" : ""}
-\\titlespacing*{\\section}{0pt}{9pt}{5pt}
+${heading}
+\\titlespacing*{\\section}{0pt}{${style.spacing}}{5pt}
 ${sans ? "\\renewcommand{\\familydefault}{\\sfdefault}" : ""}
 \\begin{document}
-\\begin{center}
-{\\LARGE\\bfseries ${esc(content.name)}}\\\\[5pt]
-{\\small ${s.contact}}
-\\end{center}
+${header}
 ${body}
 \\end{document}
 `;

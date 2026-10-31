@@ -1,12 +1,29 @@
 "use client";
 import { useState, type FormEvent } from "react";
-import { ArrowRight, Check, Compass, FileText, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Check, ShieldCheck } from "lucide-react";
 import { Button, Field, Input } from "./ui";
-export function AuthScreen({ local }: { local: boolean }) {
-  const [mode, setMode] = useState<"signup" | "signin">("signup"),
+import { Asterisk, Logo } from "./brand";
+
+type Mode = "signup" | "signin";
+export function AuthScreen({
+  local,
+  initialMode = "signup",
+  initialError = "",
+}: {
+  local: boolean;
+  initialMode?: Mode;
+  initialError?: string;
+}) {
+  const [mode, setModeState] = useState<Mode>(initialMode),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
+    [error, setError] = useState(initialError),
     [notice, setNotice] = useState("");
+  function setMode(next: Mode) {
+    setModeState(next);
+    setError("");
+    window.history.replaceState(null, "", next === "signup" ? "/signup" : "/signin");
+  }
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -34,7 +51,7 @@ export function AuthScreen({ local }: { local: boolean }) {
       ) {
         setNotice("Check your email to confirm your account, then sign in.");
         setMode("signin");
-      } else window.location.reload();
+      } else window.location.assign("/");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not connect.");
     } finally {
@@ -42,67 +59,63 @@ export function AuthScreen({ local }: { local: boolean }) {
     }
   }
   return (
-    <div className="auth-screen">
-      <section className="auth-story">
-        <a href="/" className="brand">
-          <span className="brand-icon">
-            <Compass size={23} />
+    <div className="jb-auth">
+      <section className="jb-auth-story">
+        <Link href="/" aria-label="J*B home">
+          <Logo size={28} inverted />
+        </Link>
+        <div className="jb-auth-story-main">
+          <span className="jb-auth-kicker">
+            <Asterisk size={12} color="var(--teal)" />
+            Your personal AI career agent
           </span>
-          waypoint<span className="brand-period">.</span>
-        </a>
-        <div className="auth-story-main">
-          <div className="eyebrow">
-            <span className="tiny-line" />
-            YOUR NEXT CHAPTER
-          </div>
           <h1>
-            Good things
+            Your career.
             <br />
-            are ahead.
+            <span>On autopilot.</span>
           </h1>
-          <p>
-            A career agent that gets to know you.
-            <br />
-            And helps the right opportunities find you.
-          </p>
-          <div className="story-illustration" aria-hidden="true">
-            <div className="orbit orbit-one" />
-            <div className="orbit orbit-two" />
-            <div className="orbit-center">
-              <Compass size={45} strokeWidth={1} />
-            </div>
-            <span className="orbit-label label-one">
-              <FileText size={16} />
-              Your story, well told
-            </span>
-            <span className="orbit-label label-two">
-              <Check size={16} />
-              One step closer
-            </span>
-            <i className="orbit-point" />
-          </div>
+          <ul>
+            {[
+              "Tailored LaTeX resumes from facts you confirm",
+              "Applications prepared from a single job link",
+              "Nothing is submitted without your approval",
+            ].map((item) => (
+              <li key={item}>
+                <span>
+                  <Check size={13} />
+                </span>
+                {item}
+              </li>
+            ))}
+          </ul>
         </div>
-        <p className="auth-footnote">A little direction. A world of possibility.</p>
+        <p className="jb-auth-foot">jasteriskb.com</p>
       </section>
-      <section className="auth-panel">
-        <div className="auth-form">
-          <div className="eyebrow">LET’S MAKE YOUR NEXT MOVE</div>
-          <h2>{mode === "signup" ? "Welcome to your next chapter." : "Good to see you again."}</h2>
+      <section className="jb-auth-panel">
+        <div className="jb-auth-form">
+          <Link href="/" className="jb-auth-mobile-logo" aria-label="J*B home">
+            <Logo size={26} />
+          </Link>
+          <h2>{mode === "signup" ? "Create your J*B workspace" : "Welcome back"}</h2>
           <p>
             {mode === "signup"
-              ? "Create your workspace. We’ll take it from there, together."
-              : "Your career workspace is right where you left it."}
+              ? "Set up your career profile once. Your agent takes it from there."
+              : "Sign in to pick up where your agent left off."}
           </p>
-          <div className="segmented">
+          <div className="segmented" role="group" aria-label="Account">
             <button
+              type="button"
               onClick={() => setMode("signup")}
               className={mode === "signup" ? "selected" : ""}
+              aria-pressed={mode === "signup"}
             >
               Create account
             </button>
             <button
+              type="button"
               onClick={() => setMode("signin")}
               className={mode === "signin" ? "selected" : ""}
+              aria-pressed={mode === "signin"}
             >
               Sign in
             </button>
@@ -151,21 +164,21 @@ export function AuthScreen({ local }: { local: boolean }) {
                 {notice}
               </p>
             )}
-            <Button type="submit" disabled={busy} className="full-width">
+            <Button type="submit" disabled={busy} className="full-width jb-auth-submit">
               {busy
                 ? "Getting your workspace ready…"
                 : mode === "signup"
                   ? "Create your workspace"
-                  : "Welcome back"}
+                  : "Sign in"}
               <ArrowRight size={17} />
             </Button>
           </form>
-          <div className="auth-trust">
+          <div className="jb-auth-trust">
             <ShieldCheck size={17} />
-            <span>Your information stays yours. Every submission is yours to approve.</span>
+            <span>Your data stays private. You approve every submission.</span>
           </div>
           {local && (
-            <p className="local-note">
+            <p className="jb-auth-local">
               <span className="status-dot" />
               Local development · accounts and data stay on this device
             </p>

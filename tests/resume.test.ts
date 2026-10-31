@@ -122,6 +122,11 @@ describe("structured resume selection and provenance", () => {
       "\\input{/etc/passwd}",
     );
   });
+  it("renders every built-in template as a distinct layout", () => {
+    const content = buildResumeContent(sampleProfile(), "software").content;
+    const sources = builtInTemplates.map((t) => renderLatex(content, t.id).replace(/^%.*$/gm, ""));
+    expect(new Set(sources).size).toBe(builtInTemplates.length);
+  });
   it("trims lower-ranked items before font shrinking", () => {
     const content = buildResumeContent(sampleProfile(), "software").content;
     content.projects.push({ ...content.projects[0], name: "Lower ranked" });

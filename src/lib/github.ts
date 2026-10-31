@@ -18,7 +18,7 @@ async function api(path: string, token?: string) {
     headers: {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2026-03-10",
-      "User-Agent": "Waypoint-career-agent",
+      "User-Agent": "JB-career-agent (+https://jasteriskb.com)",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     signal: AbortSignal.timeout(15000),

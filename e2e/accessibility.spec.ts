@@ -17,6 +17,8 @@ test("core screens retain labeled controls, contrast, and responsive boundaries"
     );
   };
   await page.goto("/");
+  await inspect("Marketing home");
+  await page.goto("/signup");
   await inspect("Sign up");
   await page.request.post("/api/auth", {
     data: {
@@ -26,7 +28,7 @@ test("core screens retain labeled controls, contrast, and responsive boundaries"
       password: "Fixture-password-2026!",
     },
   });
-  await page.reload();
+  await page.goto("/");
   await expect(page.locator(".app-shell[data-ready=true]")).toBeVisible();
   for (const view of ["Agent", "Career Profile", "Resumes"]) {
     await page

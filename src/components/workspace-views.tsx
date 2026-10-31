@@ -7,7 +7,6 @@ import {
   BriefcaseBusiness,
   Check,
   ChevronRight,
-  Compass,
   CreditCard,
   ExternalLink,
   FileText,
@@ -19,10 +18,10 @@ import {
   LogOut,
   Mail,
   Plus,
+  Radar,
   Search,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
   Trash2,
   Upload,
   Zap,
@@ -33,6 +32,7 @@ import type { GithubRepo } from "@/lib/github";
 import type { Action, View } from "./workspace-app";
 import { date, statusLabel, trackName } from "./workspace-app";
 import { Badge, Button, Card, Empty, Field, Input } from "./ui";
+import { Asterisk } from "./brand";
 
 export function ResumeLibrary({
   data,
@@ -45,7 +45,10 @@ export function ResumeLibrary({
   busy: boolean;
   preview: (r: GeneratedResume) => void;
 }) {
-  const [uploadError, setUploadError] = useState("");
+  const [uploadError, setUploadError] = useState(""),
+    [track, setTrack] = useState<string>("all");
+  const tracks = ["all", ...new Set(data.templates.map((t) => t.track))];
+  const shown = data.templates.filter((t) => track === "all" || t.track === track);
   const runs = data.runs.filter(
     (r) => r.kind === "resume" && ["queued", "running"].includes(r.status),
   );
@@ -71,9 +74,12 @@ export function ResumeLibrary({
     <div className="page-content">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">YOUR STORY, WELL TOLD</div>
-          <h1>Make a lasting first impression.</h1>
-          <p>Beautiful LaTeX templates. Your experience, in the right light.</p>
+          <div className="eyebrow">LATEX RESUMES</div>
+          <h1>Resume templates</h1>
+          <p>
+            Pick a default for each career track. Every resume compiles to a one-page PDF with a
+            LaTeX source export.
+          </p>
         </div>
         <label className="button button-secondary upload-button">
           <Upload size={15} />
@@ -109,22 +115,47 @@ export function ResumeLibrary({
             : "Your resume is being compiled and checked."}
         </div>
       ))}
+      <div className="filter-chips template-filters" role="group" aria-label="Career track">
+        {tracks.map((id) => (
+          <button
+            key={id}
+            className={track === id ? "selected" : ""}
+            aria-pressed={track === id}
+            onClick={() => setTrack(id)}
+          >
+            {id === "all" ? "All tracks" : trackName(id)}
+          </button>
+        ))}
+      </div>
       <div className="template-grid">
-        {data.templates.map((t) => (
+        {shown.map((t) => (
           <Card key={t.id} className="template-card">
-            <div className="template-preview" aria-hidden="true">
-              <div className="template-paper">
-                <strong>{data.profile.legalName || "Your story"}</strong>
-                <small>EXPERIENCE · IDEAS · POSSIBILITY</small>
-                {["Education", "Experience", "Projects", "Skills"].map((s) => (
-                  <div key={s}>
-                    <h5>{s}</h5>
-                    <div className="paper-line medium" />
-                    <div className="paper-line" />
-                    <div className="paper-line short" />
-                  </div>
-                ))}
-              </div>
+            <div className="template-preview">
+              {t.custom ? (
+                <div className="template-paper" aria-hidden="true">
+                  <strong>{data.profile.legalName || "Your name"}</strong>
+                  <small>CUSTOM LATEX TEMPLATE</small>
+                  {["Education", "Experience", "Projects", "Skills"].map((s) => (
+                    <div key={s}>
+                      <h5>{s}</h5>
+                      <div className="paper-line medium" />
+                      <div className="paper-line" />
+                      <div className="paper-line short" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <a
+                  className="template-thumb"
+                  href={`/templates/${t.id}.pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Open ${t.name} sample PDF`}
+                >
+                  {/* Rendered from the real template with fictional sample content. */}
+                  <img src={`/templates/${t.id}.png`} alt="" loading="lazy" />
+                </a>
+              )}
               {data.profile.defaultTemplate === t.id && (
                 <span className="template-default">
                   <Badge tone="green">
@@ -137,7 +168,7 @@ export function ResumeLibrary({
             <div className="template-info">
               <div className="flex-between">
                 <strong>{t.name}</strong>
-                <Badge>{t.custom ? "Custom" : "LaTeX"}</Badge>
+                <Badge>{t.custom ? "Custom" : trackName(t.track)}</Badge>
               </div>
               <p>{t.description}</p>
               <div className="template-actions">
@@ -171,7 +202,7 @@ export function ResumeLibrary({
                     )
                   }
                 >
-                  <Sparkles size={12} />
+                  <Asterisk size={11} />
                   Generate
                 </Button>
               </div>
@@ -180,7 +211,7 @@ export function ResumeLibrary({
         ))}
       </div>
       <div className="section-heading">
-        <h2>Your resume library.</h2>
+        <h2>Your resumes</h2>
         <span>
           {data.resumes.length} version{data.resumes.length === 1 ? "" : "s"}
         </span>
@@ -213,16 +244,16 @@ export function ResumeLibrary({
             </div>
           ))
         ) : (
-          <Empty icon={<FileText size={23} />} title="Your first impression starts here.">
-            Add your profile, pick a template, and generate your first resume. Each version stays
-            here for you.
+          <Empty icon={<FileText size={23} />} title="No resumes yet">
+            Complete your profile, pick a template, and generate your first resume. Every version is
+            kept here with its validation report.
           </Empty>
         )}
       </Card>
       <p className="helper-text">
-        Custom templates use the documented placeholder contract. They compile only in an isolated
-        worker. Jake’s Resume is adapted under the MIT license; source downloads preserve
-        attribution.
+        Template previews use fictional sample content. Custom templates use the documented
+        placeholder contract and compile only in an isolated worker. Jake’s Resume is adapted under
+        the MIT license; source downloads preserve attribution.
       </p>
     </div>
   );
@@ -256,9 +287,9 @@ export function ApplicationList({
     <div className="page-content">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">ONE OPPORTUNITY AT A TIME</div>
-          <h1>Every step, a little closer.</h1>
-          <p>Your applications, the exact documents, and what happens next.</p>
+          <div className="eyebrow">TRACKING</div>
+          <h1>Applications</h1>
+          <p>Every application, the exact documents submitted, and what happens next.</p>
         </div>
         <a className="button button-secondary" href="/api/export">
           <ArrowDownToLine size={15} />
@@ -347,15 +378,11 @@ export function ApplicationList({
         ) : (
           <Empty
             icon={<BriefcaseBusiness size={23} />}
-            title={
-              search || filter !== "all"
-                ? "No matches just yet."
-                : "Your next chapter is an open page."
-            }
+            title={search || filter !== "all" ? "No matching applications" : "No applications yet"}
           >
             {search || filter !== "all"
               ? "Try another search or filter."
-              : "Send your agent a job link. Your applications and their complete history will appear here."}
+              : "Paste a job link in the Agent chat. Each application and its full history will appear here."}
           </Empty>
         )}
       </Card>
@@ -407,9 +434,9 @@ export function DiscoverView({
     <div className="page-content">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">A LITTLE LESS SEARCHING</div>
-          <h1>Let opportunity find you.</h1>
-          <p>Watch trusted sources. Make thoughtful moves, within your rules.</p>
+          <div className="eyebrow">AUTONOMOUS DISCOVERY</div>
+          <h1>Discover</h1>
+          <p>Watch internship lists and employer boards. J*B applies only within your rules.</p>
         </div>
         <Badge tone={data.profile.autonomy.enabled ? "green" : "neutral"}>
           {data.profile.autonomy.enabled ? "Discovery enabled" : "Discovery paused"}
@@ -417,7 +444,7 @@ export function DiscoverView({
       </div>
       <Card className="discovery-banner">
         <div>
-          <h3>Your direction. A little more momentum.</h3>
+          <h3>Let opportunities come to you.</h3>
           <p>
             Autonomous discovery reads supported GitHub and employer feeds, verifies each job, and
             applies only within your explicit authorization.
@@ -451,7 +478,7 @@ export function DiscoverView({
         )}
       </Card>
       <div className="section-heading">
-        <h2>Your opportunity sources.</h2>
+        <h2>Sources</h2>
         <Button variant="secondary" size="sm" onClick={() => setShowAdd(!showAdd)}>
           <Plus size={14} />
           Add a source
@@ -534,13 +561,13 @@ export function DiscoverView({
             </div>
           ))
         ) : (
-          <Empty icon={<Compass size={24} />} title="A wider view of what’s possible.">
-            Add a supported repository or employer board to start building your opportunity sources.
+          <Empty icon={<Radar size={24} />} title="No sources yet">
+            Add a GitHub internship list, Greenhouse board, or Lever feed to start monitoring.
           </Empty>
         )}
       </Card>
       <div className="section-heading">
-        <h2>You set the boundaries.</h2>
+        <h2>Standing rules</h2>
         <ShieldCheck size={18} className="muted" />
       </div>
       <Card className="form-card">
@@ -671,9 +698,9 @@ export function IntegrationsView({
     <div className="page-content">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">A MORE COMPLETE PICTURE</div>
-          <h1>Bring your world together.</h1>
-          <p>Connect the sources that help your agent understand your story.</p>
+          <div className="eyebrow">CONNECTIONS</div>
+          <h1>Integrations</h1>
+          <p>Connect the sources that help J*B understand your experience.</p>
         </div>
         <Badge>
           <LockKeyhole size={10} />
@@ -812,7 +839,7 @@ export function IntegrationsView({
       {githubOpen && (
         <Card className="integration-import-panel">
           <div className="section-intro">
-            <h2>Your code tells part of the story.</h2>
+            <h2>Import from GitHub</h2>
             <p>Choose the repositories you want to discuss in your career profile.</p>
           </div>
           <form
@@ -885,7 +912,7 @@ export function IntegrationsView({
       )}
       <p className="helper-text">
         Connected credentials are stored in the secrets service. You can revoke access at any time.
-        Waypoint never retrieves passwords from your password manager.
+        J*B never retrieves passwords from your password manager.
       </p>
     </div>
   );
@@ -959,9 +986,9 @@ export function SettingsView({
     <div className="page-content">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">ON YOUR TERMS</div>
-          <h1>A workspace that grows with you.</h1>
-          <p>Your plan, permissions, and the details worth remembering.</p>
+          <div className="eyebrow">ACCOUNT</div>
+          <h1>Settings & billing</h1>
+          <p>Your plan, usage, and saved screening answers.</p>
         </div>
         <Button
           variant="secondary"
@@ -981,9 +1008,7 @@ export function SettingsView({
       <Card className="settings-card">
         <div className="flex-between">
           <div>
-            <h2 style={{ fontFamily: "Georgia,serif", fontSize: 23 }}>
-              A little room for possibility.
-            </h2>
+            <h2 className="settings-plan-title">Your plan</h2>
             <p className="helper-text">
               {data.billing.used} verified submissions · {data.billing.reserved} reserved ·{" "}
               {data.billing.limit} available on your plan this month
@@ -1049,7 +1074,7 @@ export function SettingsView({
         )}
       </Card>
       <div className="section-heading">
-        <h2>Details worth remembering.</h2>
+        <h2>Saved screening answers</h2>
         <Button variant="secondary" size="sm" onClick={() => setShowAnswer(!showAnswer)}>
           <Plus size={14} />
           Add an answer
@@ -1147,7 +1172,7 @@ export function SettingsView({
             )}
       </Card>
       <Card className="settings-card">
-        <h2>A clear view of your workspace.</h2>
+        <h2>Usage</h2>
         <p>Measured activity from your saved runs.</p>
         <div className="usage-grid">
           {[

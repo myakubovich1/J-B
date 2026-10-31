@@ -23,6 +23,6 @@ export async function GET(request: Request) {
     error = result.error;
   } else error = new Error("Missing confirmation code");
   return NextResponse.redirect(
-    new URL(error ? "/login?error=confirmation_failed" : "/", process.env.APP_URL || url.origin),
+    new URL(error ? "/signin?error=confirmation_failed" : "/", process.env.APP_URL || url.origin),
   );
 }
