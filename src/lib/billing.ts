@@ -80,6 +80,15 @@ export async function reconcileSubscription(subscription: Stripe.Subscription): 
   if (!userId || !/^[a-zA-Z0-9_-]{1,100}$/.test(userId)) return;
   const store = getStore();
   const existing = (await store.list("subscriptions", userId))[0];
+  // One record tracks the customer's current subscription. A late or retried event for a
+  // replaced subscription (e.g. the cancellation of a previous one) must not overwrite it;
+  // a different subscription takes over only once Stripe reports it as entitled.
+  if (
+    existing?.subscriptionId &&
+    existing.subscriptionId !== subscription.id &&
+    !["active", "trialing"].includes(subscription.status)
+  )
+    return;
   const item = subscription.items.data[0];
   const periodEnd = item?.current_period_end;
   const record: Subscription = {

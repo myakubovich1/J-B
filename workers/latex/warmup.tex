@@ -8,7 +8,13 @@
 \usepackage{graphicx}
 \usepackage[hidelinks]{hyperref}
 \begin{document}
-Cache initialization only.
+Cache initialization only. Every font the built-in templates can request at runtime must be
+loaded here: the compiler runs with --only-cached and cannot fetch missing files later.
+Separators $|$ and \textbf{bold} \textit{italic} \textbf{\textit{bold italic}}
+\textsf{sans \textbf{bold} \textit{oblique}} \href{https://example.com}{link}.
+% Math fonts load per size (a 10pt document's \small separators need cmmi9/cmsy9).
+{\tiny $|x$} {\scriptsize $|x$} {\footnotesize $|x$} {\small $|x$} {\normalsize $|x$}
+{\large $|x$} {\Large $|x$} {\LARGE $|x$} {\huge $|x$} {\Huge $|x$}
 \section*{Section}
 \begin{itemize}\item Text.\end{itemize}
 \end{document}

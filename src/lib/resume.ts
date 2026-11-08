@@ -594,6 +594,48 @@ const cleanEnvironment = (): NodeJS.ProcessEnv => ({
   LANG: "en_US.UTF-8",
   TECTONIC_UNTRUSTED_MODE: "1",
 });
+/** Compiler deadline in milliseconds; bounded so configuration cannot disable it. */
+export function latexTimeoutMs(): number {
+  const value = Number(process.env.LATEX_TIMEOUT_MS || 45000);
+  return Number.isFinite(value) ? Math.min(120000, Math.max(5000, value)) : 45000;
+}
+/** Largest file the sandbox may write. Tectonic writes logs/PDFs only at the end, so an
+ * untrusted template could otherwise flood the worker disk with a giant log or PDF. */
+export const SANDBOX_MAX_FILE_BYTES = 8 * 1024 * 1024;
+/** Isolation flags for one untrusted compile; tests run probes with exactly these flags. */
+export function sandboxRunArgs(input: {
+  name: string;
+  directory: string;
+  uid: number;
+  gid: number;
+}): string[] {
+  return [
+    "run",
+    "--rm",
+    "--init",
+    "--name",
+    input.name,
+    "--network=none",
+    "--read-only",
+    "--cap-drop=ALL",
+    "--security-opt=no-new-privileges",
+    "--pids-limit=64",
+    "--memory=384m",
+    "--memory-swap=384m",
+    "--cpus=1",
+    `--ulimit=fsize=${SANDBOX_MAX_FILE_BYTES}:${SANDBOX_MAX_FILE_BYTES}`,
+    "--ulimit=nofile=256:256",
+    `--user=${input.uid}:${input.gid}`,
+    "--tmpfs=/tmp:rw,noexec,nosuid,size=64m",
+    "--mount",
+    `type=bind,src=${input.directory},dst=/work`,
+    "--workdir=/work",
+    "-e",
+    "TECTONIC_UNTRUSTED_MODE=1",
+    "-e",
+    "HOME=/tmp",
+  ];
+}
 /** Trusted local templates may use Tectonic. Every custom or production compile requires sandbox Docker. */
 export async function compileLatex(
   source: string,
@@ -634,41 +676,44 @@ export async function compileLatex(
         }
       }
       sandboxName = `career-latex-${crypto.randomUUID()}`;
-      const result = await run(
-        "docker",
-        [
-          "run",
-          "--rm",
-          "--name",
-          sandboxName,
-          "--network=none",
-          "--read-only",
-          "--cap-drop=ALL",
-          "--security-opt=no-new-privileges",
-          "--pids-limit=64",
-          "--memory=384m",
-          "--cpus=1",
-          `--user=${uid}:${gid}`,
-          "--tmpfs=/tmp:rw,noexec,nosuid,size=64m",
-          "--mount",
-          `type=bind,src=${directory},dst=/work`,
-          "--workdir=/work",
-          "-e",
-          "TECTONIC_UNTRUSTED_MODE=1",
-          "-e",
-          "HOME=/tmp",
-          process.env.LATEX_DOCKER_IMAGE || "career-latex:local",
-          "resume.tex",
-        ],
-        { timeout: 45000, maxBuffer: 2 * 1024 * 1024, env: cleanEnvironment() },
-      );
-      log = `${result.stdout}\n${result.stderr}`;
+      try {
+        const result = await run(
+          "docker",
+          [
+            ...sandboxRunArgs({ name: sandboxName, directory, uid, gid }),
+            process.env.LATEX_DOCKER_IMAGE || "career-latex:local",
+            "resume.tex",
+          ],
+          // SIGTERM only reaches the container via the CLI's signal proxy, and the CLI keeps
+          // waiting on it. SIGKILL ends the CLI at the deadline; `finally` removes the container.
+          {
+            timeout: latexTimeoutMs(),
+            killSignal: "SIGKILL",
+            maxBuffer: 2 * 1024 * 1024,
+            env: cleanEnvironment(),
+          },
+        );
+        log = `${result.stdout}\n${result.stderr}`;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") throw error;
+        const failure = error as { killed?: boolean; stdout?: string; stderr?: string };
+        throw new Error(
+          failure.killed
+            ? "Isolated LaTeX compilation exceeded its time limit."
+            : `Isolated LaTeX compilation failed: ${`${failure.stderr || ""}\n${failure.stdout || ""}`.trim().slice(-1500) || "compiler error"}`,
+        );
+      }
     } else {
       try {
         const result = await run(
           process.env.TECTONIC_BIN || "tectonic",
           ["-X", "compile", "--untrusted", "--keep-logs", "--outdir", directory, filename],
-          { cwd: directory, timeout: 45000, maxBuffer: 2 * 1024 * 1024, env: cleanEnvironment() },
+          {
+            cwd: directory,
+            timeout: latexTimeoutMs(),
+            maxBuffer: 2 * 1024 * 1024,
+            env: cleanEnvironment(),
+          },
         );
         log = `${result.stdout}\n${result.stderr}`;
       } catch (error) {
