@@ -29,14 +29,18 @@ describe("PostgreSQL migration, RLS, queue and quota contracts", () => {
     await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
       create schema auth;create table auth.users(id uuid primary key);create function auth.uid()returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated,service_role;grant execute on function auth.uid()to authenticated,service_role;
       create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint);create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;create function storage.foldername(name text)returns text[] language sql immutable as $$select string_to_array(name,'/')$$;`);
-    const filename = (await readdir("supabase/migrations")).find((f) => f.endsWith(".sql"))!;
-    const migration = await readFile(`supabase/migrations/${filename}`, "utf8");
-    // PGlite lacks the hosted Supabase Vault extension and pgcrypto. UUIDs use
-    // PostgreSQL's built-in gen_random_uuid; the tested SQL core is unchanged.
-    const core = migration
-      .split("create extension if not exists supabase_vault")[0]
-      .replace("create extension if not exists pgcrypto;", "");
-    await db.exec(core);
+    // Apply every migration in order, as `supabase db push` would.
+    for (const filename of (await readdir("supabase/migrations"))
+      .filter((f) => f.endsWith(".sql"))
+      .sort()) {
+      const migration = await readFile(`supabase/migrations/${filename}`, "utf8");
+      // PGlite lacks the hosted Supabase Vault extension and pgcrypto. UUIDs use
+      // PostgreSQL's built-in gen_random_uuid; the tested SQL core is unchanged.
+      const core = migration
+        .split("create extension if not exists supabase_vault")[0]
+        .replace("create extension if not exists pgcrypto;", "");
+      await db.exec(core);
+    }
     await db.query("insert into auth.users(id)values($1),($2)", [user, other]);
     await db.query("select public.save_owned_record($1,$2,$3,$4::jsonb)", [
       "applications",
@@ -202,5 +206,102 @@ describe("PostgreSQL migration, RLS, queue and quota contracts", () => {
         )
       ).rows,
     ).toHaveLength(1);
+  });
+  it("keeps operational tables and pruning service-only", async () => {
+    await db.exec("set role authenticated");
+    try {
+      await expect(db.query("select * from public.worker_heartbeats")).rejects.toThrow(
+        "permission denied",
+      );
+      await expect(db.query("select public.prune_operational_records(90)")).rejects.toThrow(
+        "permission denied",
+      );
+    } finally {
+      await db.exec("reset role");
+    }
+    await db.exec("set role service_role");
+    try {
+      await db.query(
+        "insert into public.worker_heartbeats(worker_id,started_at,beat_at,lanes)values('gone',now(),now()-interval '8 days',1),('live',now(),now(),1)",
+      );
+      await db.query(
+        "insert into public.rate_limits values('old',1,now()-interval '2 days'),('current',1,now()+interval '1 minute')",
+      );
+      const pruned = (
+        await db.query<{ result: Record<string, number> }>(
+          "select public.prune_operational_records(90) as result",
+        )
+      ).rows[0].result;
+      expect(pruned).toMatchObject({ rate_limits: 1, worker_heartbeats: 1 });
+      expect((await db.query("select worker_id from public.worker_heartbeats")).rows).toEqual([
+        { worker_id: "live" },
+      ]);
+    } finally {
+      await db.exec("reset role");
+    }
+  });
+  it("removes every tenant row when the auth user is deleted, and only that tenant's", async () => {
+    const leaving = crypto.randomUUID();
+    await db.query("insert into auth.users(id)values($1)", [leaving]);
+    const app = {
+      ...application,
+      ...entity(leaving),
+      jobUrl: "https://jobs.lever.co/fixture/leaving",
+    };
+    await db.query("select public.save_owned_record($1,$2,$3,$4::jsonb)", [
+      "applications",
+      app.id,
+      leaving,
+      JSON.stringify(app),
+    ]);
+    const profile = {
+      ...entity(leaving),
+      profile: { ...emptyProfile("leaving@example.test"), skills: ["SQL"] },
+      version: 1,
+    };
+    await db.query("select public.save_owned_record($1,$2,$3,$4::jsonb)", [
+      "candidate_profiles",
+      profile.id,
+      leaving,
+      JSON.stringify(profile),
+    ]);
+    const event = {
+      ...entity(leaving),
+      applicationId: app.id,
+      runId: null,
+      stage: "queued",
+      message: "x",
+      details: {},
+    };
+    await db.query("select public.save_owned_record($1,$2,$3,$4::jsonb)", [
+      "application_events",
+      event.id,
+      leaving,
+      JSON.stringify(event),
+    ]);
+    const tables = (
+      await db.query<{ table_name: string }>(
+        "select table_name from information_schema.columns where table_schema='public' and column_name='user_id'",
+      )
+    ).rows.map((row) => row.table_name);
+    const count = async (owner: string) => {
+      let total = 0;
+      for (const table of tables)
+        total += Number(
+          (
+            await db.query<{ n: number }>(
+              `select count(*)::int as n from public.${table} where user_id=$1`,
+              [owner],
+            )
+          ).rows[0].n,
+        );
+      return total;
+    };
+    const before = await count(user);
+    expect(await count(leaving)).toBeGreaterThan(3);
+    await db.query("delete from auth.users where id=$1", [leaving]);
+    expect(await count(leaving)).toBe(0);
+    expect((await db.query("select id from public.users where id=$1", [leaving])).rows).toEqual([]);
+    expect(await count(user)).toBe(before);
   });
 });

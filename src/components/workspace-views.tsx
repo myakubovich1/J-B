@@ -743,12 +743,18 @@ export function IntegrationsView({
   const connected = (p: string) =>
     data.integrations.find((i) => i.provider === p && i.status === "connected");
   async function disconnect(id: string) {
+    setError("");
     const r = await fetch(`/api/integrations/${id}`, { method: "DELETE" });
-    if (r.ok) await refresh();
-    else {
-      const d = await r.json();
-      setError(d.error);
-    }
+    const d = await r.json();
+    if (!r.ok) return setError(d.error);
+    setNotice(
+      d.revocation === "revoked"
+        ? "Disconnected. The provider authorization was revoked and the stored credential deleted."
+        : d.revocation === "unsupported"
+          ? "Disconnected and the stored credential deleted. Microsoft does not let apps revoke consent: remove Waypoint under your Microsoft account's app permissions."
+          : "Disconnected and the stored credential deleted, but the provider could not confirm revocation. Remove Waypoint from the provider's authorized apps.",
+    );
+    await refresh();
   }
   return (
     <div className="page-content">
@@ -781,13 +787,23 @@ export function IntegrationsView({
               Choose repositories
               <ArrowRight size={13} />
             </Button>
-            {data.capabilities.githubOAuth && (
-              <a
-                className="text-link"
-                href="/api/integrations/connect?provider=github&private=true"
+            {connected("github") ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void disconnect(connected("github")!.id)}
               >
-                Authorize private repositories
-              </a>
+                Disconnect private access
+              </Button>
+            ) : (
+              data.capabilities.githubOAuth && (
+                <a
+                  className="text-link"
+                  href="/api/integrations/connect?provider=github&private=true"
+                >
+                  Authorize private repositories
+                </a>
+              )
             )}
           </div>
         </Card>
@@ -1263,6 +1279,120 @@ export function SettingsView({
           </a>
         )}
       </Card>
+      <AccountControls email={data.user.email} />
     </div>
+  );
+}
+
+function AccountControls({ email }: { email: string }) {
+  const [confirming, setConfirming] = useState(false),
+    [typed, setTyped] = useState(""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState("");
+  const support = process.env.NEXT_PUBLIC_SUPPORT_EMAIL;
+  async function send(method: "POST" | "DELETE", body: object) {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await fetch("/api/account", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      return d;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The request failed.");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card className="settings-card">
+      <h2>Your data and account.</h2>
+      <p>
+        Download everything Waypoint stores about you, end sessions on other devices, or delete your
+        account.
+      </p>
+      <div className="inline-actions" style={{ marginTop: 14 }}>
+        <a className="button button-secondary button-sm" href="/api/account" download>
+          <ArrowDownToLine size={14} />
+          Download my data
+        </a>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={busy}
+          onClick={async () => {
+            if (await send("POST", { action: "signout-all" })) window.location.assign("/");
+          }}
+        >
+          <LogOut size={14} />
+          Sign out of all devices
+        </Button>
+        <Button variant="danger" size="sm" disabled={busy} onClick={() => setConfirming(true)}>
+          <Trash2 size={14} />
+          Delete account
+        </Button>
+      </div>
+      {confirming && (
+        <form
+          style={{ marginTop: 18 }}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const result = await send("DELETE", { confirmEmail: typed });
+            if (!result) return;
+            setNotice("Your account and data were deleted.");
+            window.location.assign("/");
+          }}
+        >
+          <p>
+            This permanently deletes your profile, resumes, applications, saved answers, evidence,
+            and connected-account authorizations. Applications already sent to employers cannot be
+            withdrawn by Waypoint. Cancel any paid subscription in billing first. Download your data
+            now if you want a copy.
+          </p>
+          <Field label={`Type ${email} to confirm`}>
+            <Input
+              required
+              autoComplete="off"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+            />
+          </Field>
+          <div className="inline-actions">
+            <Button
+              type="submit"
+              variant="danger"
+              size="sm"
+              disabled={busy || typed.trim().toLowerCase() !== email.toLowerCase()}
+            >
+              Permanently delete my account
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+              Keep my account
+            </Button>
+          </div>
+        </form>
+      )}
+      {support && (
+        <p className="helper-text">
+          Questions about your data? Contact <a href={`mailto:${support}`}>{support}</a>.
+        </p>
+      )}
+      {error && (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="notice" role="status">
+          {notice}
+        </p>
+      )}
+    </Card>
   );
 }

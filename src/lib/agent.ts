@@ -12,6 +12,7 @@ import {
 import { getStore } from "./store";
 import { getPlanState } from "./billing";
 import { evaluateCostAlerts } from "./observability";
+import { customerRef, sendOperationalAlert } from "./alerts";
 import { builtInTemplates, generateResume } from "./resume";
 import { executeApplication, questionContext, eligibilityContext } from "./browser";
 import { canonicalJobUrl, extractJob, JobError, matchJob, validateJobUrl } from "./jobs";
@@ -991,6 +992,19 @@ export async function runOnce(): Promise<boolean> {
         error: message,
       });
       if (!ambiguous) await store.releaseSubmission(run.userId, application.id);
+      else
+        await sendOperationalAlert({
+          severity: "critical",
+          event: "submission_unverified",
+          summary:
+            "A submission click may have reached an employer portal without verifiable receipt evidence. Reconcile it before any retry.",
+          details: {
+            customer: customerRef(run.userId),
+            run: run.id,
+            category: error instanceof JobError ? error.code : "unexpected",
+          },
+          dedupeKey: `submission_unverified:${application.id}`,
+        });
       await store.save("application_events", {
         ...entity(run.userId),
         applicationId: application.id,

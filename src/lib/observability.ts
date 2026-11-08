@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { entity, type AuditAction, type UsageEvent } from "./contracts";
 import { getStore } from "./store";
+import { customerRef, sendOperationalAlert } from "./alerts";
 
 const validCost = (value: number) => (Number.isFinite(value) && value > 0 ? value : 0);
 const stableId = (value: string) => {
@@ -154,6 +155,21 @@ export async function evaluateCostAlerts(
   }
   for (const signal of signals) {
     const key = `cost-alert:${userId}:${signal.alert.kind}:${signal.scope}`;
+    // The durable record deduplicates; only its first creation is forwarded to operators.
+    if (
+      signal.alert.kind !== "pricing_incomplete" &&
+      !(await store.get("agent_actions", stableId(key), userId))
+    )
+      await sendOperationalAlert({
+        severity: "warning",
+        event: `cost_${signal.alert.kind}`,
+        summary: `Recorded execution cost $${signal.alert.recordedCostUsd.toFixed(2)} crossed the $${signal.alert.thresholdUsd?.toFixed(2)} threshold.`,
+        details: {
+          customer: customerRef(userId),
+          estimateComplete: signal.alert.estimateComplete,
+        },
+        dedupeKey: key,
+      });
     await store.createIfAbsent("agent_actions", {
       ...entity(userId, stableId(key)),
       createdAt: now.toISOString(),

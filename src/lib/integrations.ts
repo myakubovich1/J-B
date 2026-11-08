@@ -167,6 +167,15 @@ export async function completeConnection(
       redirect_uri: c.redirect,
       grant_type: "authorization_code",
     });
+  const missing = missingScopes(saved.scopes, token.scope);
+  if (missing.length) {
+    // Users can untick permissions on the consent screen; do not keep a token that cannot
+    // perform the requested function.
+    await revokeProviderGrant(provider, token.refresh_token ?? token.access_token);
+    throw new Error(
+      `The required permission was not granted (${missing.join(", ")}). Reconnect and allow it to continue.`,
+    );
+  }
   const accountResponse =
     provider === "github"
       ? await authorizedJson("https://api.github.com/user", token.access_token)
@@ -270,11 +279,69 @@ export async function integrationToken(userId: string, connection: Integration):
   if (ref !== connection.secretRef) await deleteSecret(userId, connection.secretRef);
   return updated.accessToken;
 }
-export async function disconnectIntegration(userId: string, id: string) {
+/** Requested scopes absent from the grant. OAuth omits `scope` when it equals the request. */
+export function missingScopes(requested: string[], granted: string | undefined): string[] {
+  if (granted === undefined) return [];
+  const leaf = (scope: string) => scope.slice(scope.lastIndexOf("/") + 1).toLowerCase();
+  const have = new Set(granted.split(/[ ,]+/).filter(Boolean).map(leaf));
+  return requested.filter((scope) => scope !== "offline_access" && !have.has(leaf(scope)));
+}
+export type Revocation = "revoked" | "failed" | "unsupported";
+/** Invalidate the provider grant, not just our copy of the token. Microsoft has no
+ * app-scoped revocation for delegated consent (revokeSignInSessions would sign the user out
+ * everywhere), so its consent must be removed from the user's Microsoft account. */
+export async function revokeProviderGrant(provider: Provider, token: string): Promise<Revocation> {
+  if (provider === "outlook") return "unsupported";
+  const id = provider === "github" ? process.env.GITHUB_CLIENT_ID : process.env.GOOGLE_CLIENT_ID;
+  const secret =
+    provider === "github" ? process.env.GITHUB_CLIENT_SECRET : process.env.GOOGLE_CLIENT_SECRET;
+  if (!id || !secret) return "failed";
+  try {
+    const response =
+      provider === "gmail"
+        ? await fetch("https://oauth2.googleapis.com/revoke", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ token }),
+            signal: AbortSignal.timeout(15000),
+            redirect: "error",
+          })
+        : await fetch(`https://api.github.com/applications/${encodeURIComponent(id)}/grant`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`,
+              Accept: "application/vnd.github+json",
+              "Content-Type": "application/json",
+              "User-Agent": "Waypoint-career-agent",
+            },
+            body: JSON.stringify({ access_token: token }),
+            signal: AbortSignal.timeout(15000),
+            redirect: "error",
+          });
+    // An already invalid token (Google 400 invalid_token, GitHub 404/422) grants nothing.
+    if (response.ok || [400, 404, 422].includes(response.status)) return "revoked";
+    return "failed";
+  } catch {
+    return "failed";
+  }
+}
+function storedToken(secret: string): string {
+  if (!secret.startsWith("{")) return secret;
+  const saved = JSON.parse(secret) as Partial<OAuthToken>;
+  return saved.refreshToken || saved.accessToken || "";
+}
+export async function disconnectIntegration(userId: string, id: string): Promise<Revocation> {
   const db = getStore(),
     connection = await db.get("integration_connections", id, userId);
   if (!connection) throw new Error("Connection not found.");
-  if (connection.secretRef) await deleteSecret(userId, connection.secretRef);
+  const provider = providerSchema.parse(connection.provider);
+  let revocation: Revocation = "revoked";
+  if (connection.secretRef) {
+    const secret = await getSecret(userId, connection.secretRef);
+    if (secret) revocation = await revokeProviderGrant(provider, storedToken(secret));
+    // The local credential is always destroyed, even if the provider could not be reached.
+    await deleteSecret(userId, connection.secretRef);
+  }
   await db.save("integration_connections", {
     ...connection,
     status: "disconnected",
@@ -284,8 +351,9 @@ export async function disconnectIntegration(userId: string, id: string) {
     ...entity(userId),
     action: "integration.disconnected",
     applicationId: null,
-    details: { provider: connection.provider },
+    details: { provider: connection.provider, revocation },
   });
+  return revocation;
 }
 
 export function emailSuggestion(

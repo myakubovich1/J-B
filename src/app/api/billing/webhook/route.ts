@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { appMode, localDb, supabaseService } from "@/lib/store";
 import { processStripeEvent, stripe } from "@/lib/billing";
+import { sendOperationalAlert } from "@/lib/alerts";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
@@ -74,7 +75,14 @@ export async function POST(request: Request) {
       throw error;
     }
     return NextResponse.json({ received: true });
-  } catch {
+  } catch (error) {
+    await sendOperationalAlert({
+      severity: "warning",
+      event: "stripe_webhook_failed",
+      summary: `Processing ${event.type} failed; Stripe will retry. Entitlements may lag until it succeeds.`,
+      details: { event: event.id, category: error instanceof Error ? error.name : "unknown" },
+      dedupeKey: `stripe_webhook_failed:${event.type}`,
+    });
     return NextResponse.json(
       { error: "Webhook processing failed; Stripe should retry" },
       { status: 500 },

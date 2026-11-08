@@ -5,8 +5,8 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   try {
     checkOrigin(request);
     const user = await requireUser();
-    await disconnectIntegration(user.id, (await context.params).id);
-    return Response.json({ ok: true });
+    const revocation = await disconnectIntegration(user.id, (await context.params).id);
+    return Response.json({ ok: true, revocation });
   } catch (e) {
     return errorResponse(e);
   }

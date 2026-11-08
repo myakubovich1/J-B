@@ -12,7 +12,14 @@ vi.mock("next/headers", () => ({
       jar.delete(typeof name === "string" ? name : name.name),
   }),
 }));
-import { beginConnection, completeConnection } from "../src/lib/integrations";
+import {
+  beginConnection,
+  completeConnection,
+  disconnectIntegration,
+  missingScopes,
+} from "../src/lib/integrations";
+import { setSecret } from "../src/lib/secrets";
+import { entity } from "../src/lib/contracts";
 import { getSecret } from "../src/lib/secrets";
 import { getStore } from "../src/lib/store";
 beforeEach(() => {
@@ -64,6 +71,82 @@ describe("OAuth protocol boundaries (provider HTTP fixture)", () => {
       "expired",
     );
     expect(exchange).toHaveBeenCalledTimes(2);
+  });
+  it("rejects a grant that omits a requested permission and revokes it", async () => {
+    const user = crypto.randomUUID(),
+      state = new URL(await beginConnection(user, "github", true)).searchParams.get("state")!;
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, options?: RequestInit) => {
+        calls.push(`${options?.method || "GET"} ${String(input)}`);
+        if (String(input).endsWith("/login/oauth/access_token"))
+          return Response.json({ access_token: "under-scoped", scope: "read:user" });
+        return new Response(null, { status: 204 });
+      }),
+    );
+    await expect(completeConnection(user, "github", "code", state)).rejects.toThrow(
+      "not granted (repo)",
+    );
+    expect(calls).toContain("DELETE https://api.github.com/applications/fixture-client/grant");
+    expect(await getStore().list("integration_connections", user)).toEqual([]);
+    expect(missingScopes(["offline_access", "User.Read", "Mail.ReadBasic"], undefined)).toEqual([]);
+    expect(
+      missingScopes(
+        ["offline_access", "User.Read", "Mail.ReadBasic"],
+        "https://graph.microsoft.com/Mail.ReadBasic https://graph.microsoft.com/User.Read",
+      ),
+    ).toEqual([]);
+  });
+  it("revokes the provider grant on disconnect and always deletes the local credential", async () => {
+    process.env.GOOGLE_CLIENT_ID = "fixture-google";
+    process.env.GOOGLE_CLIENT_SECRET = "fixture-google-secret";
+    const user = crypto.randomUUID(),
+      store = getStore();
+    const connect = async (provider: "gmail" | "outlook" | "github", value: string) => {
+      const secretRef = await setSecret(user, `integration:${provider}`, value);
+      return store.save("integration_connections", {
+        ...entity(user),
+        provider,
+        status: "connected",
+        account: "fixture",
+        scopes: [],
+        secretRef,
+      });
+    };
+    const requests: { url: string; body: string }[] = [];
+    let status = 200;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, options?: RequestInit) => {
+        requests.push({ url: String(input), body: String(options?.body) });
+        return new Response(null, { status });
+      }),
+    );
+    const gmail = await connect(
+      "gmail",
+      JSON.stringify({ accessToken: "a", refreshToken: "refresh-1", expiresAt: 1 }),
+    );
+    expect(await disconnectIntegration(user, gmail.id)).toBe("revoked");
+    expect(requests[0].url).toBe("https://oauth2.googleapis.com/revoke");
+    // Revoking the refresh token ends the whole grant, not just one access token.
+    expect(new URLSearchParams(requests[0].body).get("token")).toBe("refresh-1");
+    expect(await getSecret(user, gmail.secretRef!)).toBeNull();
+
+    status = 503;
+    const github = await connect("github", "gho_fixture");
+    expect(await disconnectIntegration(user, github.id)).toBe("failed");
+    expect(JSON.parse(requests[1].body)).toEqual({ access_token: "gho_fixture" });
+    expect(await getSecret(user, github.secretRef!)).toBeNull();
+    expect((await store.get("integration_connections", github.id, user))?.status).toBe(
+      "disconnected",
+    );
+
+    const outlook = await connect("outlook", JSON.stringify({ accessToken: "o", expiresAt: 1 }));
+    expect(await disconnectIntegration(user, outlook.id)).toBe("unsupported");
+    expect(requests).toHaveLength(2);
+    expect(await getSecret(user, outlook.secretRef!)).toBeNull();
+    await expect(disconnectIntegration(crypto.randomUUID(), gmail.id)).rejects.toThrow("not found");
   });
   it("does not allow email monitoring consent on a free plan", async () => {
     await expect(beginConnection(crypto.randomUUID(), "gmail")).rejects.toThrow("Autonomous plan");
