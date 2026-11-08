@@ -1,12 +1,13 @@
 import { hostname } from "node:os";
-import { runOnce } from "../src/lib/agent";
+import { oldestLeaseRenewal, runOnce } from "../src/lib/agent";
 import { sendOperationalAlert } from "../src/lib/alerts";
 import { recordHeartbeat, removeHeartbeat } from "../src/lib/health";
 import { runRetention } from "../src/lib/retention";
+import { leaseSeconds } from "../src/lib/store";
 
 const concurrency = Math.min(4, Math.max(1, Number(process.env.WORKER_CONCURRENCY || 1)));
 const pollMs = Math.min(10000, Math.max(250, Number(process.env.WORKER_POLL_MS || 1500)));
-const leaseMs = Math.min(900, Math.max(30, Number(process.env.WORKER_LEASE_SECONDS || 600))) * 1000;
+const leaseMs = leaseSeconds() * 1000;
 const retentionHours = Number(process.env.RETENTION_INTERVAL_HOURS ?? 6);
 const workerId = `${hostname()}:${process.pid}:${crypto.randomUUID().slice(0, 8)}`;
 const startedAt = new Date().toISOString();
@@ -47,13 +48,14 @@ async function lane(index: number): Promise<void> {
 }
 
 /**
- * A run's queue lease lets another worker reclaim it once expired. A lane still working past
+ * A run's queue lease lets another worker reclaim it once expired. A stage still working past
  * its lease could then act twice, so the process exits first and lets the supervisor restart
  * it. A crash after the submission latch resolves to `submission_unverified`, never a retry.
  */
 const watchdog = setInterval(() => {
-  const deadline = Date.now() - Math.max(leaseMs * 0.8, leaseMs - 30000);
-  if (!iterationStarted.some((at) => at !== null && at < deadline)) return;
+  // Stages renew the lease; act only when a run's current lease is about to lapse.
+  const renewed = oldestLeaseRenewal();
+  if (renewed === null || Date.now() - renewed < Math.max(leaseMs * 0.8, leaseMs - 30000)) return;
   log("error", "worker_watchdog_exit", { leaseSeconds: leaseMs / 1000 });
   void sendOperationalAlert({
     severity: "critical",

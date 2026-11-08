@@ -57,6 +57,8 @@ Register the GitHub, Google, and Microsoft OAuth applications with the precise c
 
 ## Operations and recovery
 
+Health, readiness, alerting, deployment, rollback, incident, backup/restore, and retention procedures are in [RUNBOOKS.md](RUNBOOKS.md). Set `ALERT_WEBHOOK_URL`/`ALERT_WEBHOOK_SECRET`, `HEALTH_CHECK_TOKEN`, `DEPLOYMENT_ENVIRONMENT`, and `APP_VERSION` on web and worker hosts; point an uptime monitor at `/api/ready`. Apply `supabase/migrations/20261107230000_operations.sql` (worker heartbeats and operational pruning) with the other migrations.
+
 Grant operator metrics access by setting `ADMIN_USER_IDS` to an explicit comma-separated list of authenticated user UUIDs. No user is an operator by default, and email addresses or editable profile metadata do not grant access. The standalone `/admin` view and `/api/admin` endpoint enforce the allowlist independently. They return aggregate counts and hashed customer references, excluding contact details, answers, document content, and payment identifiers.
 
 Metrics use the current UTC calendar month; active users count distinct profile, run, or usage activity within the last 30 days. Nominal monthly recurring revenue uses `PLAN_PRO_MONTHLY_USD=39` and `PLAN_AUTONOMOUS_MONTHLY_USD=199` by default and excludes trials, taxes, discounts, proration, and payment failures. Set these nominal prices to match the configured Stripe plans; they do not replace Stripe price IDs or invoice reconciliation. Runtime is recorded elapsed time and may include approval pauses.

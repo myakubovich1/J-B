@@ -33,6 +33,7 @@ The test employer is deliberately labeled, available only in local development, 
 npm run typecheck
 npm test
 RUN_LATEX_TESTS=1 npm test
+docker build -f workers/latex/Dockerfile -t career-latex:local . && RUN_DOCKER_TESTS=1 npm test -- tests/latex-sandbox.test.ts
 npm run test:e2e:local
 npm run build
 ```
@@ -61,5 +62,7 @@ Deploy the web process to Vercel using Supabase mode. Run the worker on a dedica
 - [Agent execution and browser support](docs/AGENT.md)
 - [OAuth setup](docs/OAUTH.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Operations runbooks](docs/RUNBOOKS.md)
+- [Release gate register](docs/RELEASE_READINESS.md)
 
 Set `ADMIN_USER_IDS` to an explicit comma-separated UUID allowlist for `/admin`. The operator view reports saved activity, nominal MRR, queue state, costs, retries, and failure categories. Cost estimates require configured unit prices. Set `GLOBAL_EMERGENCY_STOP=true` on both processes to stop new side effects.

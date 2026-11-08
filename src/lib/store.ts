@@ -63,6 +63,11 @@ function checkCollection(collection: string): asserts collection is Collection {
 function parseRow<K extends Collection>(row: { data: string } | undefined): Records[K] | null {
   return row ? (JSON.parse(row.data) as Records[K]) : null;
 }
+/** Queue lease length, bounded like the SQL claim function (30-900 s). */
+export function leaseSeconds(): number {
+  const value = Number(process.env.WORKER_LEASE_SECONDS || 600);
+  return Number.isFinite(value) ? Math.min(900, Math.max(30, value)) : 600;
+}
 export function utcMonthStart(): string {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
@@ -209,9 +214,7 @@ export class LocalStore implements Store {
         ...run,
         status: "running",
         attempts: run.attempts + 1,
-        leaseUntil: new Date(
-          Date.now() + Number(process.env.WORKER_LEASE_SECONDS || 600) * 1000,
-        ).toISOString(),
+        leaseUntil: new Date(Date.now() + leaseSeconds() * 1000).toISOString(),
         startedAt: run.startedAt || now,
         updatedAt: now,
       };
@@ -410,7 +413,7 @@ export class SupabaseStore implements Store {
   async claimRun(workerId?: string): Promise<AgentRun | null> {
     const { data, error } = await supabaseService().rpc("claim_agent_run", {
       p_worker_id: workerId || "worker",
-      p_lease_seconds: Number(process.env.WORKER_LEASE_SECONDS || 600),
+      p_lease_seconds: leaseSeconds(),
       p_concurrency: Number(process.env.WORKER_CONCURRENCY || 2),
     });
     if (error) throw error;

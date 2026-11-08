@@ -1,10 +1,10 @@
 # Implementation progress
 
-Updated: 2026-11-07. Latest full local verification: 2026-11-04.
+Updated: 2026-11-08. Latest full local verification: 2026-11-08 (branch `release/waypoint-staging`). The per-requirement release gates, evidence, and owner decisions are in [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md).
 
 ## Release assessment
 
-Functional local MVP / internal alpha, ready for staging integration work. Not ready for public release or unsupervised real-customer applications. Local fixture success does not establish live ATS reliability or production security. No live employer applications were sent during development.
+Locally verified internal alpha. **No gate is staging- or production-verified**: no staging environment, Supabase project, Stripe test account, OAuth apps, Browserbase account, alert channel, or permitted employer pages were available. Recommended next step is a staging deployment followed by internal testing; a supervised private beta should wait for the blocked staging gates, the legal/policy decisions, and a non-submitting real-ATS diagnostic. Not ready for public launch. No live employer applications have ever been sent.
 
 ## Verified integrated core
 
@@ -15,56 +15,48 @@ Functional local MVP / internal alpha, ready for staging integration work. Not r
 - Safe URL intake → employer metadata → relevance → PDF → actual Playwright form filling/upload → explicit review → single submission → real stored fixture receipt → private evidence → tracking and CSV export.
 - Clarification of conditional screening questions; exact scoped confirmed answer memory; separate submission approval; cancel-before-submit; no login credential capture.
 - Duplicate job/run prevention, atomic leases/concurrency, atomic quota reservation, verified-success accounting, retry guards, stale-review rejection, ambiguous-submit latch, and emergency stop.
-- Desktop/mobile screenshots inspected. Full UI core test passed after fixing SQLite row serialization and form labeling.
-- Prepared-form fingerprints bind answers to question wording/choices and require fresh review when the form changes. Unknown optional preselected values pause. Final filled fields are persisted for manual and standing-authorized submissions.
-- CSV/JSON imports produce editable education, experience, project, skill, and achievement suggestions. Explicit review adds them only to the local profile draft; saving persists confirmed records with source provenance. Arbitrary prose/OCR remain manual.
-- Built-in template layout settings persist per tenant/template and are snapshotted on generated resumes. Custom templates support immutable, bounded PNG/JPEG bundles with integrity checks and concurrent-upload cleanup. Custom PDFs always require manual submission review.
-- Discovery stores source health, inventories, revisions, additions/updates/removals/reopenings, and employer closure evidence. Partial scans do not infer removals; consent and limits are rechecked before enqueue.
-- Operator metrics show explicit cohorts/denominators for completion, verification, clarification, resume generation/validation, and application cost. Durable in-app cost alerts deduplicate and recover partial notification writes.
+- Prepared-form fingerprints bind answers to question wording/choices and require fresh review when the form changes. Unknown optional preselected values pause.
+- CSV/JSON imports produce editable suggestions that are added only after explicit review and confirmation.
+- Built-in template layout settings persist per tenant/template and are snapshotted on generated resumes. Custom templates support immutable, bounded PNG/JPEG bundles. Custom PDFs always require manual submission review.
+- Discovery source health, inventories, revisions, and closure evidence; consent and limits rechecked before enqueue.
+- Operator metrics with explicit cohorts/denominators; durable in-app cost alerts.
 
-## Implemented integration boundaries
+## Added in the 2026-11-08 release pass
 
-- Supabase schema/RLS, relational projections, private artifact bucket, Auth callback, service-only queue/quota/rate-limit functions, and Vault secret references.
-- OpenAI Responses structured extraction and bounded read-only chat tool loop; explicit configured model IDs and token/cost events.
-- Public GitHub REST imports and selected repositories; OAuth/PKCE for authorized private access; all imported contributions require confirmation.
-- Greenhouse and Lever deterministic browser paths, Browserbase persistent per-user contexts, secure sign-in handoff, platform challenge pauses.
-- Premium source monitoring for GitHub Markdown and supported ATS feeds, deduplication, current-posting verification, matching, standing-authorization controls, and scheduled queue runs.
-- Gmail/Microsoft OAuth and token refresh, narrow header searches, association/detection, notification events, and scheduled polling. Status changes remain reviewable user actions.
-- Stripe Checkout/portal, signed idempotent webhook processing, entitlement reconciliation, configurable quotas/plans.
-- Operator view with users/subscriptions/nominal MRR, attempts/receipts/failures, runtime, browser minutes, tokens/cost, retries, queue and failure categories.
+- **Isolated compiler, executed for the first time.** Docker sandbox suite (`tests/latex-sandbox.test.ts`, `RUN_DOCKER_TESTS=1`) probes the real container and compiles hostile templates. Fixed: deadline never fired in Docker mode (looping template pinned a worker lane); 101 MB output flood onto the worker disk; every built-in template failing offline in production because math fonts were not cached (`cmsy10`, `cmmi9`).
+- **Billing:** a late event for a replaced Stripe subscription no longer downgrades the current paying subscription.
+- **Queue leases:** stage renewals honour `WORKER_LEASE_SECONDS` (were hard-coded to 600 s); lease watchdog exits a worker before a lease can lapse mid-stage; heartbeats; graceful shutdown.
+- **Browser filling:** a transient timeout on a slow page no longer pauses an application on a field the profile answers.
+- **OAuth:** disconnect revokes Google/GitHub grants (Microsoft reported as unsupported with manual steps); under-scoped grants are revoked and rejected; GitHub private access can be disconnected.
+- **Customer data rights:** JSON export, sign out of all devices, and self-service account deletion (revokes grants, removes artifacts and secrets; Supabase deletion cascades through the auth user). Refuses while a billable subscription or worker step is live.
+- **Operations:** `/api/health`, `/api/ready`, signed external alert webhook (uncertain submissions, worker failure/watchdog, emergency stop, webhook failure, cost thresholds), scheduled retention of orphaned artifacts and expired operational rows, web image `HEALTHCHECK`, new migration `20261107230000_operations.sql`.
+- **Docs:** `docs/RUNBOOKS.md` (deployment, migration, rollback, incident, backup/restore, retention) and `docs/RELEASE_READINESS.md`.
 
-## Verification evidence
+## Verification evidence (2026-11-08, macOS host, Node 24.22, Docker Desktop 28.4)
 
-- `RUN_LATEX_TESTS=1 npm test`: 142 passed, 1 skipped across 20 files. The skipped test requires a real configured Supabase project.
-- `npm run test:e2e:local`: 8 passed. Includes onboarding, real PDF upload, explicit and scoped standing authorization, portal receipt, tracking, duplicates, conditional questions, login pause, changed-form review, structured import/edit/save, tenant boundaries, premium enforcement, and core-screen accessibility/mobile checks.
-- Real Tectonic compilation: all six templates, accented candidate names, and settings-aware PDFs passed. An A4/12pt PDF was visually inspected: one page, no compiler warnings/layout issues.
-- `npm run typecheck` and `npm run build`: passed against the integrated source.
-- `npm audit --audit-level=high`: zero reported vulnerabilities at the recorded run. This is not a complete security audit.
-- Focused discovery/job tests: 52 passed, including 23 discovery lifecycle cases. Resume/settings/assets tests: 11 passed. Admin/observability tests: 13 passed; these are included in the full suite, not additional totals.
-- Supabase core SQL was exercised against embedded PostgreSQL by the persistence workstream, including tenant RLS, queue claim, quota reservation, and rejected privileged calls. Full hosted-stack/Vault test remains gated.
-- Verification ran in an ordinary-path temporary checkout with identical locked dependencies because cloud-backed reads in the canonical workspace stalled. Durable source remains in this repository; no production deployment was performed.
+- `RUN_LATEX_TESTS=1 RUN_DOCKER_TESTS=1 npx vitest run`: 181 passed, 1 skipped (live Supabase, gated) across 23 files.
+- `npm run test:e2e:local`: 10 passed, including the account export/sign-out-everywhere/deletion flow and health endpoints.
+- `npm run typecheck`, `npm run build`: pass. `npm audit --audit-level=high`: 0 vulnerabilities (not a security audit).
+- Baseline before changes reproduced: 141 passed / 1 failed (cold TeX cache timeout; passes warm) / 1 skipped; E2E 8 passed.
+- Load rehearsal (`scripts/load-test.mjs`, 2 worker lanes, Docker compiler): 8 users 8/8 in 68 s; 16 users 16/16 in 142 s; 0 failures; invariants held.
+- Crash rehearsal (real SIGKILL): run reclaimed and submitted once; kill after the submission latch → `submission_unverified`, not retried or billed, signed alert delivered.
+- Local-mode backup/restore rehearsed with identical record counts and working sign-in, application, receipt, and PDF.
+- Desktop (1440 px) and mobile (390 px) screens inspected; a mobile overflow in the new account controls was fixed. A Docker-compiled PDF was visually inspected.
 
 ## Requires configuration or remains unverified
 
-- No production credentials were supplied. Supabase hosted Auth/Storage/Vault, OpenAI live requests, Stripe Checkout/live reconciliation, GitHub private OAuth, Google/Microsoft consent/refresh, Browserbase, and actual employer workflows are not represented as live-tested.
-- Docker daemon was unavailable; custom/production isolated LaTeX execution is implemented but has not been run on this host. It fails closed when unavailable. Trusted built-in local compilation is verified.
-- Real ATS diagnostics must remain non-submitting until a permitted employer/domain and authorized live test are configured. Third-party forms may change.
+- Hosted Supabase (Auth, Storage, Vault, RLS advisors), Stripe test mode, live OAuth consent/refresh/revocation, Browserbase, OpenAI, alert channel, and a staging deployment and release rehearsal.
+- Real Greenhouse/Lever pages in non-submitting mode need the owner to name permitted employer pages; live submissions need explicit authorization naming the destination and applicant data.
+- Worker egress restriction and the compose worker recipe on a Linux host; re-run the sandbox suite there.
+- Owner/legal decisions: product name, hosting, billing/grace/refund policy, data retention periods, privacy policy/terms/subprocessors/consent, Google restricted-scope verification, alert on-call, model and unit prices.
 
-## Outstanding expansion
+## Outstanding expansion (excluded from the first release)
 
-- Workday, generic/model-driven Stagehand fallback, reliable account registration and password handoff/storage are intentionally unsupported. These stop for user assistance.
-- Custom asset compilation remains unverified until Docker is available; workspace asset admission checks are conservative rather than a hard transactional global storage ledger.
-- Structured CSV/JSON imports are supported; automated extraction from arbitrary transcript/LinkedIn/resume prose and OCR are not implemented.
-- Exact-question memory is conservative; semantic question equivalence and broader ATS field widgets need supported adapters/tests.
-- Email detects reviewable updates; automatic legal/consequential status interpretation, message-body drafting, OTP inbox retrieval, and employer email sending are not enabled.
-- Transactional external notifications, production incident-alert delivery, staging provider diagnostics, retention/account-erasure workflows, and a full deployment rehearsal remain necessary before a public beta.
-- Cost estimates require operator unit prices; procurement/pricing economics are not validated.
+- Workday, employer account registration, and generic/model-driven browser fallback stop for user assistance.
+- OCR and automated extraction from arbitrary prose; structured CSV/JSON imports are supported.
+- Email sending, drafting, and OTP retrieval; inbox monitoring creates reviewable notifications only.
+- Time-based expiry of customer data pending a retention policy.
 
-## Next tasks
+## Development environment note
 
-1. Configure a disposable Supabase staging project; apply migrations, run gated tests/advisors, and verify Auth, Vault, Storage, and tenant isolation.
-2. Build and test the isolated compiler and Chromium worker on dedicated infrastructure, including egress restrictions, crash recovery, and concurrent execution.
-3. Complete provider consent and Stripe test-mode setup; validate OAuth refresh/revocation, inbox permissions, billing lifecycle, and Browserbase sessions using real credentials.
-4. Validate the chosen Greenhouse/Lever employer workflows without submission, then conduct explicitly authorized controlled live tests with receipt reconciliation.
-5. Complete retention/account-erasure workflows, external incident delivery, backup/restore rehearsal, and staging deployment/rollback validation before admitting real beta users.
-6. Expand one ATS widget/workflow at a time with fixtures and authorized diagnostics. Workday/account registration remain outside current supported automation.
+The canonical folder (`…/Projects/J*B`) is iCloud-synced on a nearly full disk; evicted files stall shell reads and builds. Work and verification run in the ordinary-path worktree `~/Projects/waypoint` (git worktree of `~/Projects/jasteriskb`), and changed files are copied back to the canonical folder.

@@ -9,7 +9,7 @@ import {
   type GeneratedResume,
   type Stage,
 } from "./contracts";
-import { getStore } from "./store";
+import { getStore, leaseSeconds } from "./store";
 import { getPlanState } from "./billing";
 import { evaluateCostAlerts } from "./observability";
 import { customerRef, sendOperationalAlert } from "./alerts";
@@ -559,7 +559,12 @@ async function processRun(claimed: AgentRun): Promise<void> {
           "authorization_revoked",
         );
     }
-    run = { ...run, stage: next, leaseUntil: new Date(Date.now() + 600000).toISOString() };
+    run = {
+      ...run,
+      stage: next,
+      leaseUntil: new Date(Date.now() + leaseSeconds() * 1000).toISOString(),
+    };
+    leaseRenewals.set(run.id, Date.now());
     await store.save("agent_runs", run);
     if (run.applicationId)
       await store.save("application_events", {
@@ -677,6 +682,7 @@ async function processRun(claimed: AgentRun): Promise<void> {
       leaseUntil: null,
       error: "Submission recovery requires reconciliation.",
     });
+    await alertUnverified(run, application.id, "worker_recovered_after_latch");
     return;
   }
   await store.save("usage_events", {
@@ -886,6 +892,7 @@ async function processRun(claimed: AgentRun): Promise<void> {
       status: "submission_unverified",
       error: outcome.message,
     });
+    await alertUnverified(run, application.id, "receipt_unverified");
     await store.save("agent_runs", {
       ...run,
       status: "waiting",
@@ -934,12 +941,30 @@ async function processRun(claimed: AgentRun): Promise<void> {
   );
 }
 
+/** Every uncertain submission needs an operator to reconcile it before anything is retried. */
+async function alertUnverified(run: AgentRun, applicationId: string, category: string) {
+  await sendOperationalAlert({
+    severity: "critical",
+    event: "submission_unverified",
+    summary:
+      "A submission click may have reached an employer portal without verifiable receipt evidence. Reconcile it before any retry.",
+    details: { customer: customerRef(run.userId), run: run.id, category },
+    dedupeKey: `submission_unverified:${applicationId}`,
+  });
+}
+/** When each run this process holds last claimed or renewed its lease. */
+const leaseRenewals = new Map<string, number>();
+/** Oldest lease renewal among runs in progress here, for the worker's lease watchdog. */
+export function oldestLeaseRenewal(): number | null {
+  return leaseRenewals.size ? Math.min(...leaseRenewals.values()) : null;
+}
 export async function runOnce(): Promise<boolean> {
   if (emergencyStop()) return false;
   const store = getStore(),
     run = await store.claimRun();
   if (!run) return false;
   const started = Date.now();
+  leaseRenewals.set(run.id, started);
   try {
     const usage = await store.list("usage_events", run.userId);
     const monthlyCost = usage
@@ -993,18 +1018,11 @@ export async function runOnce(): Promise<boolean> {
       });
       if (!ambiguous) await store.releaseSubmission(run.userId, application.id);
       else
-        await sendOperationalAlert({
-          severity: "critical",
-          event: "submission_unverified",
-          summary:
-            "A submission click may have reached an employer portal without verifiable receipt evidence. Reconcile it before any retry.",
-          details: {
-            customer: customerRef(run.userId),
-            run: run.id,
-            category: error instanceof JobError ? error.code : "unexpected",
-          },
-          dedupeKey: `submission_unverified:${application.id}`,
-        });
+        await alertUnverified(
+          run,
+          application.id,
+          error instanceof JobError ? error.code : "unexpected",
+        );
       await store.save("application_events", {
         ...entity(run.userId),
         applicationId: application.id,
@@ -1024,6 +1042,7 @@ export async function runOnce(): Promise<boolean> {
       application?.id || null,
     );
   } finally {
+    leaseRenewals.delete(run.id);
     await evaluateCostAlerts(run.userId, run.applicationId || null).catch(() => {
       console.error(JSON.stringify({ level: "error", event: "cost_alert_recording_failed" }));
     });

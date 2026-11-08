@@ -4,7 +4,7 @@ Last updated: 2026-11-08 (UTC). Branch `release/waypoint-staging`. Owner of ever
 
 **Status vocabulary.** *Implemented* — code exists, not independently verified. *Locally verified* — executed and passing on the development host (macOS, Node 24.22, Docker Desktop 28.4, local SQLite or embedded PostgreSQL); never hosted. *Staging verified* / *Production verified* — executed against that hosted environment. *Blocked* — cannot be verified without an external dependency named in the row. *Excluded* — deliberately outside the first supported release.
 
-**Summary.** No gate is staging- or production-verified: no staging environment, credentials, or provider accounts were available. Every gate that could run locally has run. Five release-blocking defects were found and fixed in this pass (G-14, G-33a–c, G-28b); each has a regression test that fails on the old code.
+**Summary.** No gate is staging- or production-verified: no staging environment, credentials, or provider accounts were available. Every gate that could run locally has run. Six release-blocking defects and four lesser defects were found and fixed in this pass (blocking: G-14, G-18, G-33a, G-33b, G-33c, G-28b; lesser: G-10, G-11, G-48, alert coverage in G-20). Each fix has a regression test, and the tests for the blocking defects were confirmed to fail on the old code where practical.
 
 ## Evidence index
 
@@ -13,12 +13,12 @@ Last updated: 2026-11-08 (UTC). Branch `release/waypoint-staging`. Owner of ever
 | Baseline reproduction (before changes) | `RUN_LATEX_TESTS=1 npx vitest run` | 141 passed, 1 failed, 1 skipped. The failure was a cold Tectonic bundle cache fetching packages over the network past the 45 s deadline; re-run warm: 15/15. Environmental, not a code defect; production uses the pre-warmed Docker image with `--only-cached`. |
 | Baseline E2E | `npm run test:e2e:local` | 8 passed (2.4 min) — matches the recorded baseline |
 | Baseline typecheck / audit | `npm run typecheck`; `npm audit --audit-level=high` | pass; 0 vulnerabilities |
-| Final unit/integration | `RUN_LATEX_TESTS=1 RUN_DOCKER_TESTS=1 npx vitest run` | FINAL_UNIT |
-| Final E2E | `npm run test:e2e:local` | FINAL_E2E |
-| Final build | `npm run build` | FINAL_BUILD |
+| Final unit/integration | `RUN_LATEX_TESTS=1 RUN_DOCKER_TESTS=1 npx vitest run` | 181 passed, 1 skipped (live Supabase, gated) across 23 files |
+| Final E2E | `npm run test:e2e:local` | 10 passed (8 baseline + account lifecycle + health) |
+| Final build / audit / format | `npm run build`; `npm audit --audit-level=high`; `prettier --check` | build pass; 0 vulnerabilities; all files formatted except `src/app/globals.css`, which was already unformatted in the recovered baseline |
 | Docker sandbox | `RUN_DOCKER_TESTS=1 npx vitest run tests/latex-sandbox.test.ts` | 22 passed against image `career-latex:local` built from `workers/latex/Dockerfile` |
-| Load rehearsal | `scripts/load-test.mjs` (see G-49) | LOAD_SUMMARY |
-| Crash recovery | scripted SIGKILL of the worker (see G-18) | CRASH_SUMMARY |
+| Load rehearsal | `scripts/load-test.mjs` (see G-49) | 8 users: 8/8 in 68 s; 16 users: 16/16 in 142 s; 0 failures after fixes |
+| Crash recovery | scripted SIGKILL of the worker (see G-18) | Kill during preparation: reclaimed after 30 s lease, submitted once, billed once. Kill after submission latch: `submission_unverified`, not retried, not billed, reservation held, signed critical alert delivered to a local webhook receiver |
 
 ## Foundation
 
@@ -41,9 +41,9 @@ Last updated: 2026-11-08 (UTC). Branch `release/waypoint-staging`. Owner of ever
 | G-15 | Payment failure & cancellation | Entitlement only for `active`/`trialing` within period | Grace period is a policy choice (currently none) | `past_due` and `canceled` remove paid features | `tests/billing.test.ts` | pass | Locally verified | Owner: dunning/grace policy; staging test clocks |
 | G-16 | Durable queue leases, retries, concurrency | Atomic claim (SQLite `BEGIN IMMEDIATE`; Postgres advisory lock + `skip locked`), per-tenant serialization, bounded retries | — | One claimant per run; tenant runs serialized | `tests/store.test.ts`, `tests/postgres.test.ts`, load rehearsal | pass | Locally verified | Hosted Postgres under concurrent workers |
 | G-17 | Quota reservations | Reserve before submit; consume on verified receipt; release on safe failure | — | No double count; uncertain submit keeps reservation | Store/PGlite tests; load invariants | pass | Locally verified | — |
-| G-18 | Worker crash recovery & supervision | Lease expiry reclaim; latch → `submission_unverified`. **Added:** heartbeats, lease watchdog (exits before a lease can be double-claimed), graceful shutdown, failure alerts | Watchdog previously absent: an over-running lane could act after its lease was reclaimed | Killed worker's run is reclaimed and completes once; kill after latch never resubmits | Scripted SIGKILL rehearsal | CRASH_SUMMARY | Locally verified | Supervisor on worker host (systemd/compose `restart`) |
+| G-18 | Worker crash recovery & supervision | Lease expiry reclaim; latch → `submission_unverified`. **Added:** heartbeats, lease watchdog, graceful shutdown, failure alerts | **Defect:** every stage renewed the lease to a hard-coded 600 s, ignoring `WORKER_LEASE_SECONDS` — recovery always took up to 10 min, and a configured lease above 600 s was silently *shortened*, allowing a reclaim while a long stage was still acting. Fixed: one bounded `leaseSeconds()` for claims and renewals; the watchdog tracks each run's last renewal and exits before a lease can lapse | Killed worker's run is reclaimed and completes once; kill after latch never resubmits | `tests/lease.test.ts` (fails on old code); scripted SIGKILL rehearsal with real worker processes | Preparation kill: recovered in 36 s, 1 application, 1 billed. Post-latch kill: `submission_unverified`, 0 billed, reservation held, alert delivered | Locally verified | Supervisor on worker host (systemd/compose `restart`) |
 | G-19 | Budgets, cost accounting, emergency stop | Per-user budget, attempt/model/browser limits, cost events, global stop | Unit prices are configuration | Budget blocks new runs; stop prevents side effects | `tests/observability.test.ts`, `tests/agent.test.ts` | pass | Locally verified | Owner: model choice and unit prices |
-| G-20 | Operational alerts | **Was:** in-app only. **Added:** signed webhook delivery with retries and log fallback for uncertain submissions, worker failure/watchdog, emergency stop, webhook failure, cost thresholds | — | Alerts reach an external channel; signature verifiable; no customer content | `tests/operations.test.ts` (HTTP fixture) | pass | Locally verified | Real alert channel URL + on-call owner |
+| G-20 | Operational alerts | **Was:** in-app only. **Added:** signed webhook delivery with retries and log fallback for uncertain submissions, worker failure/watchdog, emergency stop, webhook failure, cost thresholds | All three code paths that mark a submission uncertain alert (the worker-recovery path initially did not; found by the crash rehearsal) | Alerts reach an external channel; signature verifiable; no customer content | `tests/operations.test.ts` (HTTP fixture); crash rehearsal against a local signature-checking receiver | pass; receiver validated the HMAC | Locally verified | Real alert channel URL + on-call owner |
 
 ## Application workflow
 
@@ -84,7 +84,7 @@ Last updated: 2026-11-08 (UTC). Branch `release/waypoint-staging`. Owner of ever
 | G-39 | Retention & private-artifact cleanup | `tests/operations.test.ts`: unreferenced artifacts past 24 h removed, referenced/recent kept; expired operational rows pruned; PGlite prune function | pass | Locally verified | Owner: customer-data retention periods |
 | G-40 | Credential / session revocation | Sign out of all devices (local verified, E2E second device loses session); OAuth revocation (G-10) | pass | Locally verified | Supabase global sign-out on staging |
 | G-41 | External alert delivery | G-20 | — | Locally verified | Real channel |
-| G-42 | Backup & restore | Local-mode procedure: BACKUP_SUMMARY. Supabase procedure written in RUNBOOKS | — | Locally verified (local mode only) | Staging restore rehearsal; Supabase plan/PITR and Storage backup choice |
+| G-42 | Backup & restore | Local-mode procedure rehearsed: stopped stack, archived `DATA_DIR` (8 MB, 29 users), restored to a new directory in 21 s; identical record counts in all 10 collections; restored stack signed a user in and served their submitted application, verified receipt, and private PDF. Supabase procedure written in RUNBOOKS | — | Locally verified (local mode only) | Staging restore rehearsal; Supabase plan/PITR and Storage backup choice |
 | G-43 | Health, readiness, worker supervision | `/api/health`, `/api/ready` (unit + E2E); heartbeats; watchdog; web image `HEALTHCHECK` | pass | Locally verified | Uptime monitor + supervisor configuration |
 | G-44 | Deployment, migration, rollback, incident runbooks | `docs/RUNBOOKS.md` | written | Implemented (unrehearsed) | Staging rehearsal |
 | G-45 | Privacy, consent, support flows | Export/delete/sign-out controls in Settings; optional support contact (`NEXT_PUBLIC_SUPPORT_EMAIL`) | — | Blocked | Owner/legal: privacy policy, terms, subprocessor disclosure, consent wording for automated submissions, support address |
@@ -93,10 +93,23 @@ Last updated: 2026-11-08 (UTC). Branch `release/waypoint-staging`. Owner of ever
 
 | ID | Requirement | Result | Status |
 | --- | --- | --- | --- |
-| G-46 | Unit/integration/security suites | FINAL_UNIT | Locally verified |
-| G-47 | E2E incl. accessibility (axe) | FINAL_E2E | Locally verified |
+| G-46 | Unit/integration/security suites | 181 passed, 1 skipped | Locally verified |
+| G-47 | E2E incl. accessibility (axe) | 10 passed | Locally verified |
 | G-48 | UI at desktop and mobile | Screens inspected at 1440 and 390 px. Found and fixed: account buttons overflowed by 121 px on mobile (now wrap; 0 px overflow) | Locally verified |
-| G-49 | Load / concurrency | LOAD_SUMMARY | Locally verified (single host, dev-mode web server) |
+| G-49 | Load / concurrency | See below | Locally verified (single host, dev-mode web server) |
+
+### G-49 load rehearsal detail
+
+Each virtual user signs up, saves a profile, compiles a resume in the Docker sandbox, prepares the fixture application in headless Chromium, approves, and waits for the verified receipt; it then re-applies to the same URL and checks invariants (exactly one application, one billed submission, unchanged receipt). Stack: Next dev server + one worker with 2 lanes, `LATEX_MODE=docker`, MacBook Air (8 GB), local SQLite. Production web latency is not represented (dev server); worker-side numbers are.
+
+| Run | Users | Result | Wall clock | End-to-end p50 / p95 | Resume p50 / p95 | Prepare p50 / p95 | Submit p50 / p95 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 (before G-28b fix) | 8 | 7/8; 1 paused on a falsely "unanswerable" field (fail-safe) | 873 s (incl. 15 min timeout) | 125 s / 132 s | 24 s / 32 s | 82 s / 85 s | 3 s / 18 s |
+| 2 | 8 | invalid run: dev-server file watcher reloaded pages continuously because `DATA_DIR` was inside the project; not a product defect (production has no watcher; the E2E launcher already isolates data) | — | — | — | — | — |
+| 3 (after fixes) | 8 | **8/8, 0% failure**, all invariants held | 68 s | 52 s / 68 s | 11 s / 18 s | 35 s / 46 s | 5 s / 10 s |
+| 4 | 16 | **16/16, 0% failure**, all invariants held | 142 s | 103 s / 142 s | 29 s / 58 s | 68 s / 82 s | 6 s / 12 s |
+
+Throughput is bounded by worker lanes (≈6.7 applications/min with 2 lanes); latency grows linearly with queue depth, as designed (one active run per tenant, global lane cap). Recorded cost: 0 model tokens (no model configured), 1.1 browser-minutes for 32 attempts, $0 because unit prices are unset — **execution cost is not measured** until model and browser unit prices are configured. Retries: 0.
 | G-50 | Staging deployment & release rehearsal | — | Blocked: no staging infrastructure or credentials |
 | G-51 | Production cutover | — | Not started; requires owner authorization |
 
