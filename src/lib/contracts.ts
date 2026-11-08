@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ResumeSettings } from "./resume-settings";
 
 export const trackSchema = z.enum(["software", "finance", "consulting", "product", "general"]);
 export type CareerTrack = z.infer<typeof trackSchema>;
@@ -227,6 +228,8 @@ export type ScreeningAnswer = Entity & {
 };
 export type GeneratedResume = Entity & {
   templateId: string;
+  templateSettings?: ResumeSettings;
+  templateAssets?: { name: string; sha256: string }[];
   track: CareerTrack;
   applicationId: string | null;
   title: string;
@@ -266,6 +269,18 @@ export type ResumeTemplate = Entity & {
   source: string;
   custom: boolean;
   license: string;
+  baseTemplateId?: string;
+  settings?: ResumeSettings;
+  assets?: TemplateAsset[];
+  assetBundleFor?: string;
+  assetUploadId?: string;
+};
+export type TemplateAsset = {
+  name: string;
+  storageKey: string;
+  sha256: string;
+  contentType: "image/png" | "image/jpeg";
+  size: number;
 };
 export type Message = Entity & {
   role: "user" | "assistant";
@@ -302,6 +317,37 @@ export type JobSource = Entity & {
   lastCheckedAt: string | null;
   lastRevision: string | null;
   error: string | null;
+  health?: "healthy" | "partial" | "error" | "paused";
+  lastSuccessfulAt?: string | null;
+  listingSnapshot?: {
+    url: string;
+    fingerprint: string;
+    firstSeenAt: string;
+    lastSeenAt: string;
+    removedAt: string | null;
+    title: string;
+    company: string;
+    verification: "unverified" | "open" | "closed" | "unavailable";
+    verifiedAt: string | null;
+    jobFingerprint?: string;
+    errorCategory?: string;
+  }[];
+  changes?: {
+    url: string;
+    kind: "added" | "updated" | "removed" | "reopened" | "closed";
+    observedAt: string;
+  }[];
+  lastScan?: {
+    listed: number;
+    added: number;
+    updated: number;
+    removed: number;
+    verifiedOpen: number;
+    closed: number;
+    unavailable: number;
+    queued: number;
+    complete: boolean;
+  };
 };
 export type Notification = Entity & {
   title: string;
@@ -318,6 +364,16 @@ export type Source = Entity & {
   importedAt: string;
   status?: "queued" | "ready" | "failed";
   error?: string;
+  structured?: {
+    format: "csv" | "json";
+    records: ImportedRecord[];
+    issues: string[];
+  };
+};
+export type ImportedRecord = {
+  id: string;
+  kind: "education" | "experience" | "project" | "skill" | "achievement";
+  fields: Record<string, string>;
 };
 export type AuditAction = Entity & {
   action: string;

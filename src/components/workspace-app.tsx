@@ -389,7 +389,13 @@ export function WorkspaceApp({ initial }: { initial: Workspace }) {
             />
           )}
           {view === "resumes" && (
-            <ResumeLibrary data={data} act={act} busy={busy} preview={setPreview} />
+            <ResumeLibrary
+              data={data}
+              act={act}
+              busy={busy}
+              preview={setPreview}
+              refresh={refresh}
+            />
           )}
           {view === "applications" && (
             <ApplicationList data={data} openApp={setSelectedApp} act={act} />

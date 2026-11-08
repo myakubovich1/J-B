@@ -6,11 +6,13 @@ import {
   type ApplicationStatus,
   type Approval,
   type CandidateProfile,
+  type GeneratedResume,
   type Stage,
 } from "./contracts";
 import { getStore } from "./store";
 import { getPlanState } from "./billing";
-import { generateResume } from "./resume";
+import { evaluateCostAlerts } from "./observability";
+import { builtInTemplates, generateResume } from "./resume";
 import { executeApplication, questionContext, eligibilityContext } from "./browser";
 import { canonicalJobUrl, extractJob, JobError, matchJob, validateJobUrl } from "./jobs";
 
@@ -53,6 +55,9 @@ export function stableHash(value: unknown): string {
   return createHash("sha256")
     .update(JSON.stringify(normalize(value)))
     .digest("hex");
+}
+export function requiresResumeReview(resume: Pick<GeneratedResume, "templateId">): boolean {
+  return !builtInTemplates.some((template) => template.id === resume.templateId);
 }
 function stableUuid(value: string): string {
   const h = createHash("sha256").update(value).digest("hex");
@@ -446,9 +451,10 @@ async function processRun(claimed: AgentRun): Promise<void> {
     if (!source?.storageKey)
       throw new JobError("The imported source is unavailable.", "source_missing");
     try {
-      const [{ readArtifact }, { extractDocument }] = await Promise.all([
+      const [{ readArtifact }, { extractDocument }, { extractImportRecords }] = await Promise.all([
         import("./storage"),
         import("./imports"),
+        import("./import-review"),
       ]);
       const text = await extractDocument(
         source.name,
@@ -458,6 +464,7 @@ async function processRun(claimed: AgentRun): Promise<void> {
         ...source,
         text: text.slice(0, 100000),
         status: "ready",
+        structured: extractImportRecords(source.name, text),
         error: undefined,
       });
       await store.save("agent_runs", {
@@ -759,7 +766,9 @@ async function processRun(claimed: AgentRun): Promise<void> {
     );
   application = { ...application, status: "ready", error: null };
   await store.save("applications", application);
-  const auto = await standingAuthorization(profile, application);
+  // Custom source may contain prose outside the structured placeholders. Its actual PDF must
+  // be reviewed even when the user has standing permission for supported employer domains.
+  const auto = !requiresResumeReview(resume) && (await standingAuthorization(profile, application));
   const outcome = await executeApplication({
     application,
     profile,
@@ -864,7 +873,7 @@ async function processRun(claimed: AgentRun): Promise<void> {
       application,
       "submission",
       `Submit to ${job.company}?`,
-      `Your ${job.title} application is ready. Review the exact resume and answers, then authorize one submission.`,
+      `Your ${job.title} application is ready. Review the exact resume and answers, then authorize one submission.${requiresResumeReview(resume) ? " Your custom template may contain additional text; check the complete compiled PDF before approving." : ""}`,
       [],
       profile,
     );
@@ -1000,6 +1009,10 @@ export async function runOnce(): Promise<boolean> {
       retryable ? `${message} I'll retry this preparation step safely.` : message,
       application?.id || null,
     );
+  } finally {
+    await evaluateCostAlerts(run.userId, run.applicationId || null).catch(() => {
+      console.error(JSON.stringify({ level: "error", event: "cost_alert_recording_failed" }));
+    });
   }
   return true;
 }

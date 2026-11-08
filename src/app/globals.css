@@ -3251,3 +3251,14 @@ select.input {
   opacity: 1;
   color: #60704f;
 }
+
+.import-record-review { margin: 1.5rem 0; padding-bottom: 1.5rem; border-bottom: 1px solid var(--line); }
+.import-record-review > h3 { font-size: 1rem; margin-bottom: .75rem; }
+.import-record-card { padding: 1rem; margin: 1rem 0; border: 1px solid var(--line); border-radius: .75rem; }
+.import-record-card .checkbox-label { flex-wrap: wrap; overflow-wrap: anywhere; }
+.import-record-card summary, .import-source-text summary { cursor: pointer; font-size: .8rem; color: var(--green); padding: .5rem 0; }
+.import-record-card .form-grid { margin-top: 1rem; }
+.source-lifecycle { margin-top: .6rem; max-width: 40rem; }
+.source-lifecycle summary { cursor: pointer; font-size: .72rem; color: var(--green); margin: .6rem 0; }
+.source-lifecycle li { display: flex; flex-wrap: wrap; gap: .45rem; margin: .4rem 0; font-size: .7rem; }
+.source-lifecycle a { color: var(--green); text-decoration: underline; overflow-wrap: anywhere; }

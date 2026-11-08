@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -24,11 +24,13 @@ const money = (value: number) =>
   }).format(value);
 const number = (value: number) =>
   new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
+const percentage = (value: number | null) =>
+  value === null ? "No observations" : `${number(value * 100)}%`;
 export function AdminView({ initial }: { initial: AdminSnapshot }) {
   const [data, setData] = useState(initial);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch("/api/admin", { cache: "no-store" });
@@ -45,11 +47,38 @@ export function AdminView({ initial }: { initial: AdminSnapshot }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
   useEffect(() => {
     const timer = setInterval(() => void refresh(), 30000);
     return () => clearInterval(timer);
-  }, []);
+  }, [refresh]);
+  const outcomeMetrics = [
+    {
+      label: "Application completion",
+      value: data.outcomes.applicationCompletion,
+      note: "Verified receipts / applications first attempted this month.",
+    },
+    {
+      label: "Submission verification",
+      value: data.outcomes.submissionVerification,
+      note: "Verified receipts / applications whose submission started this month.",
+    },
+    {
+      label: "Clarification frequency",
+      value: data.outcomes.clarificationFrequency,
+      note: "Applications with a screening question / first-attempt cohort. Login and submission approvals are excluded.",
+    },
+    {
+      label: "Resume generation success",
+      value: data.outcomes.resumeGeneration,
+      note: "Successful / finished measured generations, including compilation and PDF validation. Older uninstrumented attempts are excluded.",
+    },
+    {
+      label: "Saved PDF validation",
+      value: data.outcomes.savedResumeValidation,
+      note: "Valid / saved resume artifacts generated this month. Compiler crashes that produced no artifact are excluded.",
+    },
+  ];
   const metrics = [
     {
       label: "Active users · 30 days",
@@ -139,6 +168,39 @@ export function AdminView({ initial }: { initial: AdminSnapshot }) {
           </Card>
         ))}
       </div>
+      <Card className="mb-6 p-6">
+        <h2 className="text-sm font-semibold">Outcome rates</h2>
+        <p className="mt-2 text-xs text-[var(--muted)]">
+          Application cohorts count distinct applications, including{" "}
+          {data.outcomes.inProgressApplications} still in progress. Retries do not add applications
+          to a cohort.
+        </p>
+        <dl className="mt-6 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+          {outcomeMetrics.map(({ label, value, note }) => (
+            <div key={label} className="border-t border-[var(--line)] pt-4">
+              <dt className="text-[11px] font-medium">{label}</dt>
+              <dd className="mt-2 text-xl">{percentage(value.rate)}</dd>
+              <dd className="mt-1 text-[11px] text-[var(--muted)]">
+                {value.numerator} of {value.denominator}
+              </dd>
+              <dd className="mt-2 text-[10px] leading-relaxed text-[var(--muted)]">{note}</dd>
+            </div>
+          ))}
+          <div className="border-t border-[var(--line)] pt-4">
+            <dt className="text-[11px] font-medium">Mean application execution cost</dt>
+            <dd className="mt-2 text-xl">
+              {data.outcomes.meanApplicationCostUsd === null
+                ? "No observations"
+                : money(data.outcomes.meanApplicationCostUsd)}
+            </dd>
+            <dd className="mt-2 text-[10px] leading-relaxed text-[var(--muted)]">
+              Recorded costs allocated to the first-attempt cohort, including retries and partial
+              work, divided by its application count. Unallocated chat costs are excluded.
+              {!data.outcomes.applicationCostEstimateComplete && " Unit pricing is incomplete."}
+            </dd>
+          </div>
+        </dl>
+      </Card>
       <div className="mb-6 grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <Card className="min-w-0 p-6">
           <div className="flex-between mb-7">
@@ -297,6 +359,80 @@ export function AdminView({ initial }: { initial: AdminSnapshot }) {
           )}
         </Card>
       </div>
+      <Card className="mb-6 overflow-hidden">
+        <div className="p-6">
+          <h2 className="text-sm font-semibold">Execution cost alerts</h2>
+          <p className="mt-2 text-[11px] text-[var(--muted)]">
+            {data.costAlertCount} observations this month · Latest 50 · Saved in-app and shown to
+            the affected user. External alert delivery is not configured by this feature.
+          </p>
+        </div>
+        {data.costAlerts.length ? (
+          <div className="overflow-auto">
+            <table className="w-full min-w-[680px] text-left text-xs">
+              <caption className="sr-only">
+                Recorded execution cost threshold and pricing alerts
+              </caption>
+              <thead className="bg-[#f4f5ef] text-[10px] text-[var(--muted)]">
+                <tr>
+                  {["Observed (UTC)", "Customer", "Signal", "Recorded cost", "Threshold"].map(
+                    (label) => (
+                      <th key={label} scope="col" className="px-6 py-3 font-medium">
+                        {label}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {data.costAlerts.map((alert, index) => (
+                  <tr
+                    key={`${alert.customer}:${alert.kind}:${alert.observedAt}:${index}`}
+                    className="border-t border-[var(--line)]"
+                  >
+                    <td className="px-6 py-4">
+                      <time dateTime={alert.observedAt}>
+                        {new Date(alert.observedAt).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          timeZone: "UTC",
+                        })}
+                      </time>
+                    </td>
+                    <th scope="row" className="px-6 py-4 font-mono text-[11px] font-normal">
+                      {alert.customer}
+                    </th>
+                    <td className="px-6 py-4">
+                      {
+                        {
+                          expensive_application: "Application cost",
+                          monthly_budget: "Monthly budget",
+                          pricing_incomplete: "Missing unit prices",
+                        }[alert.kind]
+                      }
+                      {!alert.estimateComplete && (
+                        <span className="mt-1 block text-[10px] text-[var(--muted)]">
+                          Estimate incomplete
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">{money(alert.recordedCostUsd)}</td>
+                    <td className="px-6 py-4">
+                      {alert.thresholdUsd === null ? "Not applicable" : money(alert.thresholdUsd)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="px-6 pb-6 text-xs text-[var(--muted)]">
+            No cost threshold or pricing alerts were recorded this month.
+          </p>
+        )}
+      </Card>
       <Card className="overflow-hidden">
         <div className="flex-between p-6">
           <div>

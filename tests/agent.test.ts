@@ -35,7 +35,10 @@ vi.mock("../src/lib/store", () => ({
   }),
 }));
 vi.mock("../src/lib/billing", () => ({ getPlanState: async () => billing }));
-vi.mock("../src/lib/resume", () => ({ generateResume: vi.fn() }));
+vi.mock("../src/lib/resume", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/lib/resume")>()),
+  generateResume: vi.fn(),
+}));
 vi.mock("../src/lib/browser", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/lib/browser")>()),
   executeApplication: vi.fn(),
@@ -45,6 +48,7 @@ import {
   assertTransition,
   enqueueApplication,
   resolveApproval,
+  requiresResumeReview,
   stableHash,
 } from "../src/lib/agent";
 const save = <K extends Collection>(table: K, row: Records[K]) =>
@@ -61,6 +65,11 @@ beforeEach(() => {
 });
 
 describe("agent state and authorization", () => {
+  it("requires custom source PDF review even when standing authorization is available", () => {
+    expect(requiresResumeReview({ templateId: "jakes" })).toBe(false);
+    expect(requiresResumeReview({ templateId: crypto.randomUUID() })).toBe(true);
+    expect(requiresResumeReview({ templateId: "jakes-custom" })).toBe(true);
+  });
   it("allows real application progress but blocks fabricated backwards transitions", () => {
     expect(() => assertTransition("ready", "applying")).not.toThrow();
     expect(() => assertTransition("applying", "submitted")).not.toThrow();

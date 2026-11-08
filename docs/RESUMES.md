@@ -52,3 +52,17 @@ The engine checks compilation success, PDF signature and size, extractable text,
 PDFs with unresolved overflow, missing glyphs, failed identity checks, or excessive page counts are stored with `validation.valid=false` and cannot proceed to an application upload. The exact structured content, TeX source, PDF, source record IDs, warnings, and errors remain inspectable. Automated checks cannot prove every possible visual overlap in arbitrary custom templates; visually review custom layouts before relying on them. No claim of complete visual validation is made.
 
 Uploaded PDF imports are bounded to 10 MB and 30 pages with subprocess deadlines. Text imports include TXT, Markdown, JSON, CSV (including LinkedIn export files), and TeX. Scanned PDFs require user-provided text; OCR is not configured. Extraction produces untrusted source text for review, not confirmed profile facts.
+
+## User layout settings
+
+Each built-in template has persisted, tenant-scoped layout overrides available from **Layout settings** in Resumes: template/serif/sans font, 10/11/12pt body size, 0.65/0.75/0.90in margins, compact/comfortable spacing, and Letter/A4 paper. Closed Zod choices prevent raw TeX injection through settings. New generated records snapshot the effective settings; earlier PDFs and source remain immutable. **Save & generate** queues real compilation; the resulting PDF is available through the existing preview. Overflow handling still trims content rather than reducing the selected font.
+
+## Custom supporting images
+
+A custom template can have one immutable bundle of up to six flat PNG/JPEG files: 1 MB per file, 3 MB per bundle, and dimensions at most 4096 × 4096. Reference them as `assets/filename.png` in the source. Archives, paths, scripts, SVG, fonts, and arbitrary TeX packages are not supported assets. Upload a new custom template version to replace a bundle.
+
+Private manifests store filenames, sizes, media types, and SHA-256 hashes. Concurrent upload requests atomically claim one manifest; losing or partially failed uploads clean up only their own objects. An uncertain manifest commit preserves objects for recovery. Admission checks limit workspace bundles and bytes, but distributed hard storage accounting still requires a transactional ledger.
+
+The compiler rechecks hashes, validates names/headers/dimensions, writes assets only inside the fresh job directory, and requires Docker for every asset-backed or custom compilation. Header checks do not fully decode an image; decoding occurs within the isolated compiler. Generated resume history retains the exact source/PDF and asset hashes. Docker execution with supporting images remains unverified on this host because the daemon is unavailable.
+
+Custom TeX may contain prose outside the structured placeholders. Every custom-template application requires manual review of its actual generated PDF, even when the user has standing submission authorization.

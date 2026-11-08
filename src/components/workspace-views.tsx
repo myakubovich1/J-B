@@ -33,17 +33,21 @@ import type { GithubRepo } from "@/lib/github";
 import type { Action, View } from "./workspace-app";
 import { date, statusLabel, trackName } from "./workspace-app";
 import { Badge, Button, Card, Empty, Field, Input } from "./ui";
+import { TemplateSettings } from "./template-settings";
+import { TemplateAssets } from "./template-assets";
 
 export function ResumeLibrary({
   data,
   act,
   busy,
   preview,
+  refresh,
 }: {
   data: Workspace;
   act: Action;
   busy: boolean;
   preview: (r: GeneratedResume) => void;
+  refresh: () => Promise<void>;
 }) {
   const [uploadError, setUploadError] = useState("");
   const runs = data.runs.filter(
@@ -140,6 +144,23 @@ export function ResumeLibrary({
                 <Badge>{t.custom ? "Custom" : "LaTeX"}</Badge>
               </div>
               <p>{t.description}</p>
+              {!t.custom && (
+                <TemplateSettings
+                  template={t}
+                  onSaved={refresh}
+                  onGenerate={async () => {
+                    if (
+                      !(await act(
+                        { action: "generate_resume", templateId: t.id, track: t.track },
+                        "Your resume is queued.",
+                      ))
+                    )
+                      throw new Error(
+                        "The resume could not be queued. Review your saved profile and try again.",
+                      );
+                  }}
+                />
+              )}
               <div className="template-actions">
                 <Button
                   variant="secondary"
@@ -175,6 +196,7 @@ export function ResumeLibrary({
                   Generate
                 </Button>
               </div>
+              {t.custom && <TemplateAssets template={t} onSaved={refresh} />}
             </div>
           </Card>
         ))}
@@ -518,9 +540,70 @@ export function DiscoverView({
                     : "Waiting for authorized discovery"}
                 </small>
                 {s.error && <p className="error-text">{s.error}</p>}
+                {s.lastScan && (
+                  <div className="source-lifecycle">
+                    <small>
+                      {s.lastScan.listed} listed · {s.lastScan.added} added · {s.lastScan.updated}{" "}
+                      updated · {s.lastScan.removed} removed from source
+                    </small>
+                    <small>
+                      {s.lastScan.verifiedOpen} employer-verified open · {s.lastScan.closed}{" "}
+                      employer-verified closed · {s.lastScan.unavailable} unavailable ·{" "}
+                      {s.lastScan.queued} queued
+                    </small>
+                    {!s.lastScan.complete && (
+                      <p className="helper-text">
+                        This scan reached its listing limit. Missing entries are not treated as
+                        removed.
+                      </p>
+                    )}
+                    {!!s.changes?.length && (
+                      <details>
+                        <summary>Recent listing changes</summary>
+                        <ul>
+                          {s.changes
+                            .slice(-10)
+                            .reverse()
+                            .map((change, index) => (
+                              <li key={`${change.url}:${change.observedAt}:${index}`}>
+                                <span>
+                                  {change.kind === "removed"
+                                    ? "Removed from source"
+                                    : change.kind === "closed"
+                                      ? "Employer-verified closed"
+                                      : change.kind.charAt(0).toUpperCase() + change.kind.slice(1)}
+                                </span>
+                                <a href={change.url} target="_blank" rel="noreferrer">
+                                  {s.listingSnapshot?.find((listing) => listing.url === change.url)
+                                    ?.title || new URL(change.url).hostname}
+                                </a>
+                                <small>{new Date(change.observedAt).toLocaleDateString()}</small>
+                              </li>
+                            ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                )}
               </div>
-              <Badge tone={s.enabled ? "green" : "neutral"}>
-                {s.enabled ? "Watching" : "Paused"}
+              <Badge
+                tone={
+                  !s.enabled
+                    ? "neutral"
+                    : s.health === "error"
+                      ? "red"
+                      : s.health === "partial"
+                        ? "orange"
+                        : "green"
+                }
+              >
+                {!s.enabled
+                  ? "Paused"
+                  : s.health === "error"
+                    ? "Needs attention"
+                    : s.health === "partial"
+                      ? "Partial scan"
+                      : "Watching"}
               </Badge>
               <button
                 className={`toggle ${s.enabled ? "on" : ""}`}

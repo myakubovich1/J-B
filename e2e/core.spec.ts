@@ -85,6 +85,13 @@ test("onboarding → selected LaTeX template → approved browser submission →
   await expect
     .poll(async () => (await workspace(page.request)).profile.defaultTemplate)
     .toBe("jakes");
+  await jakes.getByRole("button", { name: "Layout settings", exact: true }).click();
+  const layout = page.getByRole("dialog", { name: "Jake's Resume layout", exact: true });
+  await layout.getByLabel("Page margins", { exact: true }).selectOption("0.75");
+  await layout.getByLabel("Paper size", { exact: true }).selectOption("a4");
+  await layout.getByRole("button", { name: "Save layout", exact: true }).click();
+  await expect(layout.getByRole("status")).toContainText("Layout saved");
+  await layout.getByRole("button", { name: "Close template settings", exact: true }).click();
   await jakes.getByRole("button", { name: "Generate", exact: true }).click();
   await expect
     .poll(
@@ -120,6 +127,7 @@ test("onboarding → selected LaTeX template → approved browser submission →
   expect(state.billing.used).toBe(0);
   const resume = state.resumes.find((r) => r.id === application.resumeId)!;
   expect(resume.templateId).toBe("jakes");
+  expect(resume.templateSettings).toMatchObject({ marginInches: 0.75, paper: "a4" });
   expect(resume.validation.valid).toBe(true);
   expect(resume.content.name).toBe("Alex Fixture");
   await page.getByRole("button", { name: "Approve & submit", exact: true }).click();

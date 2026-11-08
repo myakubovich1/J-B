@@ -19,6 +19,8 @@ import type { CandidateProfile, Claim, Source } from "@/lib/contracts";
 import type { Action } from "./workspace-app";
 import { trackName } from "./workspace-app";
 import { Badge, Button, Card, Field, Input } from "./ui";
+import { ImportRecordReview } from "./import-record-review";
+import { addReviewedImport } from "@/lib/import-draft";
 const newId = () => crypto.randomUUID();
 export function ProfileEditor({
   data,
@@ -72,6 +74,29 @@ export function ProfileEditor({
     const r = await fetch("/api/profile");
     const d = await r.json();
     if (r.ok) setSavedSources(d.sources);
+  }
+  async function reviewSource(selected: Source) {
+    setSavedSources(null);
+    setImportError("");
+    setSource(selected);
+    if (
+      (selected.status === "ready" || !selected.status) &&
+      !selected.structured &&
+      /\.(csv|json)$/i.test(selected.name)
+    ) {
+      try {
+        const response = await fetch("/api/profile/suggestions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sourceId: selected.id }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Unable to extract profile records.");
+        setSource(result.source);
+      } catch (reason) {
+        setImportError(reason instanceof Error ? reason.message : "Unable to review records.");
+      }
+    }
   }
   async function showHistory() {
     const r = await fetch("/api/profile");
@@ -940,6 +965,11 @@ export function ProfileEditor({
               </button>
             </div>
             <div className="modal-body">
+              {importError && (
+                <p role="alert" className="error-text">
+                  {importError}
+                </p>
+              )}
               <p className="muted">
                 The text below is an imported source. Add only the statements you can confirm.
               </p>
@@ -951,7 +981,20 @@ export function ProfileEditor({
               ) : source.status === "failed" ? (
                 <p className="error-text">{source.error}</p>
               ) : (
-                <pre className="source-text">{source.text}</pre>
+                <>
+                  {source.structured && (
+                    <ImportRecordReview
+                      key={source.id}
+                      source={source}
+                      profile={profile}
+                      onApply={(records) => patch(addReviewedImport(profile, source, records))}
+                    />
+                  )}
+                  <details className="import-source-text">
+                    <summary>Read the source text</summary>
+                    <pre className="source-text">{source.text}</pre>
+                  </details>
+                </>
               )}
               <Field label="A fact or accomplishment to keep">
                 <textarea
@@ -1024,8 +1067,7 @@ export function ProfileEditor({
                       variant="secondary"
                       size="sm"
                       onClick={() => {
-                        setSavedSources(null);
-                        setSource(s);
+                        void reviewSource(s);
                       }}
                     >
                       Review

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { promisify } from "node:util";
-import { chown, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chown, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type {
@@ -13,6 +14,13 @@ import type {
 import { entity } from "./contracts";
 import { getStore } from "./store";
 import { writeArtifact } from "./storage";
+import {
+  defaultResumeSettings,
+  resumeSettingsSchema,
+  type ResumeSettings,
+} from "./resume-settings";
+import { recordResumeGeneration } from "./observability";
+import { readTemplateAssets, validateTemplateAssets, type CompileAsset } from "./template-assets";
 
 const run = promisify(execFile);
 export interface TemplateDefinition {
@@ -22,6 +30,8 @@ export interface TemplateDefinition {
   track: CareerTrack;
   license: string;
   custom: boolean;
+  settings?: ResumeSettings;
+  assets?: { name: string; size: number }[];
 }
 export const builtInTemplates: TemplateDefinition[] = [
   {
@@ -76,18 +86,86 @@ export const builtInTemplates: TemplateDefinition[] = [
 ];
 
 export async function listTemplates(userId: string): Promise<TemplateDefinition[]> {
-  const custom = await getStore().list("resume_templates", userId);
+  const saved = await getStore().list("resume_templates", userId);
   return [
-    ...builtInTemplates,
-    ...custom.map((t) => ({
-      id: t.id,
-      name: t.name,
-      description: "Your custom LaTeX template. Compiled only in the isolated worker.",
-      track: t.track,
-      license: t.license,
-      custom: true,
+    ...builtInTemplates.map((template) => ({
+      ...template,
+      settings: resumeSettingsSchema.parse(
+        saved.find((row) => !row.custom && row.baseTemplateId === template.id)?.settings || {},
+      ),
     })),
+    ...saved
+      .filter((t) => t.custom)
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: "Your custom LaTeX template. Compiled only in the isolated worker.",
+        track: t.track,
+        license: t.license,
+        custom: true,
+        assets: (saved.find((row) => row.assetBundleFor === t.id)?.assets || []).map((asset) => ({
+          name: asset.name,
+          size: asset.size,
+        })),
+      })),
   ];
+}
+
+function settingsRecordId(userId: string, templateId: string): string {
+  const hash = createHash("sha256").update(`resume-settings:${userId}:${templateId}`).digest("hex");
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
+export async function getResumeSettings(
+  userId: string,
+  templateId: string,
+): Promise<ResumeSettings> {
+  if (!builtInTemplates.some((template) => template.id === templateId))
+    throw new Error(
+      "Layout settings are available for built-in templates. Custom templates control layout in their source.",
+    );
+  const saved = await getStore().get(
+    "resume_templates",
+    settingsRecordId(userId, templateId),
+    userId,
+  );
+  return resumeSettingsSchema.parse(saved?.settings || {});
+}
+export async function saveResumeSettings(
+  userId: string,
+  templateId: string,
+  input: unknown,
+): Promise<ResumeSettings> {
+  const template = builtInTemplates.find((item) => item.id === templateId);
+  if (!template) throw new Error("Choose a built-in resume template.");
+  const settings = resumeSettingsSchema.parse(input);
+  const id = settingsRecordId(userId, templateId);
+  const old = await getStore().get("resume_templates", id, userId);
+  await getStore().save("resume_templates", {
+    ...(old || entity(userId, id)),
+    name: template.name,
+    track: template.track,
+    source: "",
+    custom: false,
+    license: template.license,
+    baseTemplateId: templateId,
+    settings,
+  });
+  await getStore().save("agent_actions", {
+    ...entity(userId),
+    action: "resume.settings_saved",
+    applicationId: null,
+    details: { templateId, settings },
+  });
+  return settings;
+}
+export async function resetResumeSettings(
+  userId: string,
+  templateId: string,
+): Promise<ResumeSettings> {
+  if (!builtInTemplates.some((template) => template.id === templateId))
+    throw new Error("Choose a built-in resume template.");
+  await getStore().remove("resume_templates", settingsRecordId(userId, templateId), userId);
+  return { ...defaultResumeSettings };
 }
 
 /** Every profile value enters TeX through this function; model output is never TeX. */
@@ -397,6 +475,7 @@ export function renderLatex(
   content: ResumeContent,
   templateId: string,
   customSource?: string,
+  inputSettings: ResumeSettings = defaultResumeSettings,
 ): string {
   const s = sections(content);
   if (customSource) {
@@ -418,7 +497,10 @@ export function renderLatex(
   }
   if (!builtInTemplates.some((x) => x.id === templateId))
     throw new Error("Unknown resume template.");
-  const sans = ["technical", "product", "general"].includes(templateId);
+  const settings = resumeSettingsSchema.parse(inputSettings);
+  const sans =
+    settings.font === "sans" ||
+    (settings.font === "template" && ["technical", "product", "general"].includes(templateId));
   const rule = ["jakes", "finance", "consulting"].includes(templateId);
   const firstExperience = ["technical", "product"].includes(templateId);
   const body = [
@@ -430,8 +512,8 @@ export function renderLatex(
   ]
     .filter(Boolean)
     .join("\n\n");
-  return `${templateId === "jakes" ? '% MIT License\n% \n% Copyright (c) 2020 Jake Gutierrez\n% \n% Permission is hereby granted, free of charge, to any person obtaining a copy\n% of this software and associated documentation files (the "Software"), to deal\n% in the Software without restriction, including without limitation the rights\n% to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n% copies of the Software, and to permit persons to whom the Software is\n% furnished to do so, subject to the following conditions:\n% \n% The above copyright notice and this permission notice shall be included in all\n% copies or substantial portions of the Software.\n% \n% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n% IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n% FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n% AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n% SOFTWARE.\n' : ""}% Structured resume; profile values escaped.\n% ${templateId === "jakes" ? "Adapted from Jake Gutierrez, https://github.com/jakegut/resume (MIT); see templates/LICENSE-JAKES." : "Copyright (c) Career Agent contributors, MIT."}\n\\documentclass[letterpaper,11pt]{article}
-\\usepackage[margin=0.65in]{geometry}
+  return `${templateId === "jakes" ? '% MIT License\n% \n% Copyright (c) 2020 Jake Gutierrez\n% \n% Permission is hereby granted, free of charge, to any person obtaining a copy\n% of this software and associated documentation files (the "Software"), to deal\n% in the Software without restriction, including without limitation the rights\n% to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n% copies of the Software, and to permit persons to whom the Software is\n% furnished to do so, subject to the following conditions:\n% \n% The above copyright notice and this permission notice shall be included in all\n% copies or substantial portions of the Software.\n% \n% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n% IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n% FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n% AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n% SOFTWARE.\n' : ""}% Structured resume; profile values escaped.\n% ${templateId === "jakes" ? "Adapted from Jake Gutierrez, https://github.com/jakegut/resume (MIT); see templates/LICENSE-JAKES." : "Copyright (c) Career Agent contributors, MIT."}\n\\documentclass[${settings.paper === "a4" ? "a4paper" : "letterpaper"},${settings.fontSize}pt]{article}
+\\usepackage[margin=${settings.marginInches}in]{geometry}
 \\usepackage{fontspec}
 \\setmainfont{lmroman10-regular.otf}[BoldFont=lmroman10-bold.otf,ItalicFont=lmroman10-italic.otf,BoldItalicFont=lmroman10-bolditalic.otf]
 \\setsansfont{lmsans10-regular.otf}[BoldFont=lmsans10-bold.otf,ItalicFont=lmsans10-oblique.otf,BoldItalicFont=lmsans10-boldoblique.otf]
@@ -440,11 +522,11 @@ export function renderLatex(
 \\usepackage[hidelinks]{hyperref}
 \\pagestyle{empty}
 \\setlength{\\parindent}{0pt}
-\\setlength{\\parskip}{2pt}
+\\setlength{\\parskip}{${settings.spacing === "comfortable" ? 4 : 2}pt}
 \\setlength{\\emergencystretch}{3em}
-\\setlist[itemize]{leftmargin=1.2em,itemsep=1pt,topsep=3pt,parsep=0pt}
+\\setlist[itemize]{leftmargin=1.2em,itemsep=${settings.spacing === "comfortable" ? 3 : 1}pt,topsep=${settings.spacing === "comfortable" ? 5 : 3}pt,parsep=0pt}
 \\titleformat{\\section}{\\large\\${rule ? "scshape" : "bfseries"}}{}{0pt}{}${rule ? "[\\titlerule]" : ""}
-\\titlespacing*{\\section}{0pt}{9pt}{5pt}
+\\titlespacing*{\\section}{0pt}{${settings.spacing === "comfortable" ? 11 : 9}pt}{${settings.spacing === "comfortable" ? 7 : 5}pt}
 ${sans ? "\\renewcommand{\\familydefault}{\\sfdefault}" : ""}
 \\begin{document}
 \\begin{center}
@@ -515,13 +597,24 @@ const cleanEnvironment = (): NodeJS.ProcessEnv => ({
 /** Trusted local templates may use Tectonic. Every custom or production compile requires sandbox Docker. */
 export async function compileLatex(
   source: string,
-  options: { custom?: boolean } = {},
+  options: { custom?: boolean; assets?: CompileAsset[] } = {},
 ): Promise<CompileResult> {
+  const assets = options.assets || [];
+  if (assets.length) {
+    if (!options.custom)
+      throw new Error("Supporting images require an isolated custom-template compile.");
+    validateTemplateAssets(assets);
+  }
   const directory = await mkdtemp(path.join(os.tmpdir(), "career-latex-"));
   const filename = path.join(directory, "resume.tex");
   let sandboxName: string | null = null;
   try {
     await writeFile(filename, source, { mode: 0o644 });
+    if (assets.length) {
+      await mkdir(path.join(directory, "assets"), { mode: 0o700 });
+      for (const asset of assets)
+        await writeFile(path.join(directory, "assets", asset.name), asset.bytes, { mode: 0o600 });
+    }
     let log = "";
     const useDocker =
       options.custom ||
@@ -534,6 +627,11 @@ export async function compileLatex(
       if (hostUid === 0) {
         await chown(directory, uid, gid);
         await chown(filename, uid, gid);
+        if (assets.length) {
+          await chown(path.join(directory, "assets"), uid, gid);
+          for (const asset of assets)
+            await chown(path.join(directory, "assets", asset.name), uid, gid);
+        }
       }
       sandboxName = `career-latex-${crypto.randomUUID()}`;
       const result = await run(
@@ -671,34 +769,60 @@ export function trimResumeContent(content: ResumeContent): ResumeContent | null 
   return null;
 }
 
-export async function generateResume(input: {
+export type GenerateResumeInput = {
   userId: string;
   profile: CandidateProfile;
   templateId: string;
   track: CareerTrack;
   job?: Job;
   applicationId?: string;
-}): Promise<GeneratedResume> {
+};
+export async function generateResume(input: GenerateResumeInput): Promise<GeneratedResume> {
+  const attemptId = crypto.randomUUID();
+  let succeeded = false;
+  try {
+    const resume = await generateResumeDocument(input);
+    succeeded = resume.validation.valid;
+    return resume;
+  } finally {
+    await recordResumeGeneration(input.userId, attemptId, {
+      succeeded,
+      applicationId: input.applicationId,
+    }).catch(() => {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "resume_metrics_failed",
+          category: "observability",
+        }),
+      );
+    });
+  }
+}
+async function generateResumeDocument(input: GenerateResumeInput): Promise<GeneratedResume> {
   const selected = buildResumeContent(input.profile, input.track, input.job);
   const contentErrors = validateContent(selected.content, input.profile);
   if (contentErrors.length) throw new Error(contentErrors.join(" "));
-  const custom = builtInTemplates.some((t) => t.id === input.templateId)
+  const savedCustom = builtInTemplates.some((t) => t.id === input.templateId)
     ? null
     : await getStore().get("resume_templates", input.templateId, input.userId);
+  const custom = savedCustom?.custom ? savedCustom : null;
   if (!builtInTemplates.some((t) => t.id === input.templateId) && !custom)
     throw new Error("Resume template not found.");
+  const settings = custom ? undefined : await getResumeSettings(input.userId, input.templateId);
+  const assets = custom ? await readTemplateAssets(input.userId, custom.id) : [];
   const id = crypto.randomUUID();
   const maxPages = Math.min(3, Math.max(1, Number(process.env.RESUME_MAX_PAGES || 1)));
   let content = selected.content;
-  let source = renderLatex(content, input.templateId, custom?.source);
-  let compiled = await compileLatex(source, { custom: !!custom });
+  let source = renderLatex(content, input.templateId, custom?.source, settings);
+  let compiled = await compileLatex(source, { custom: !!custom, assets });
   let edits = 0;
   while (compiled.pages > maxPages && edits < 8) {
     const trimmed = trimResumeContent(content);
     if (!trimmed) break;
     content = trimmed;
-    source = renderLatex(content, input.templateId, custom?.source);
-    compiled = await compileLatex(source, { custom: !!custom });
+    source = renderLatex(content, input.templateId, custom?.source, settings);
+    compiled = await compileLatex(source, { custom: !!custom, assets });
     edits++;
   }
   const errors: string[] = [];
@@ -734,6 +858,15 @@ export async function generateResume(input: {
   const resume: GeneratedResume = {
     ...entity(input.userId, id),
     templateId: input.templateId,
+    templateSettings: settings,
+    ...(assets.length
+      ? {
+          templateAssets: assets.map((asset) => ({
+            name: asset.name,
+            sha256: createHash("sha256").update(asset.bytes).digest("hex"),
+          })),
+        }
+      : {}),
     track: input.track,
     applicationId: input.applicationId ?? null,
     title: input.job

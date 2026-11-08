@@ -3,12 +3,16 @@ import type {
   AgentRun,
   Application,
   AppEvent,
+  Approval,
+  AuditAction,
+  GeneratedResume,
   ProfileRecord,
   Subscription,
   UsageEvent,
   User,
 } from "./contracts";
 import { appMode, localDb, supabaseService } from "./store";
+import { readCostAlert } from "./observability";
 
 export class AdminAccessError extends Error {
   constructor(public status: 401 | 403) {
@@ -36,6 +40,9 @@ export type AdminData = {
   usage: UsageEvent[];
   subscriptions: Subscription[];
   events?: AppEvent[];
+  approvals?: Approval[];
+  resumes?: GeneratedResume[];
+  actions?: AuditAction[];
 };
 export type AdminOptions = {
   now: Date;
@@ -47,6 +54,12 @@ export type AdminOptions = {
 };
 const amount = (value: number) => (Number.isFinite(value) ? value : 0);
 const safeDate = (value: string | undefined | null) => (value ? new Date(value).getTime() : NaN);
+const metric = (numerator: number, denominator: number) => ({
+  numerator,
+  denominator,
+  rate: denominator ? numerator / denominator : null,
+});
+const ownedKey = (userId: string, id: string) => `${userId}:${id}`;
 export function aggregateAdmin(data: AdminData, options: AdminOptions) {
   const now = options.now.getTime();
   const month = new Date(Date.UTC(options.now.getUTCFullYear(), options.now.getUTCMonth(), 1));
@@ -61,6 +74,77 @@ export function aggregateAdmin(data: AdminData, options: AdminOptions) {
   const monthlyApplications = data.applications.filter(
     (app) => safeDate(app.createdAt) >= start && safeDate(app.createdAt) <= now,
   );
+  // Application rates use first-attempt cohorts, so a resume-only job, retry, or queued item
+  // cannot silently inflate the denominator. The cohort includes work still in progress.
+  const firstAttempts = new Map<string, number>();
+  for (const event of data.usage) {
+    if (event.kind !== "attempt" || !event.applicationId) continue;
+    const at = safeDate(event.createdAt);
+    if (!Number.isFinite(at) || at > now) continue;
+    const key = ownedKey(event.userId, event.applicationId);
+    firstAttempts.set(key, Math.min(firstAttempts.get(key) ?? Infinity, at));
+  }
+  const applicationCohort = data.applications.filter((application) => {
+    const at = firstAttempts.get(ownedKey(application.userId, application.id));
+    return at !== undefined && at >= start && at <= now;
+  });
+  const cohortKeys = new Set(applicationCohort.map((app) => ownedKey(app.userId, app.id)));
+  const hasReceipt = (application: Application) => {
+    const at = safeDate(application.receipt?.verifiedAt);
+    return Number.isFinite(at) && at <= now;
+  };
+  const submissionCohort = data.applications.filter((application) => {
+    const at = safeDate(application.submissionStartedAt);
+    return at >= start && at <= now;
+  });
+  const clarified = new Set(
+    (data.approvals || [])
+      .filter((approval) => {
+        const key = ownedKey(approval.userId, approval.applicationId);
+        const at = safeDate(approval.createdAt);
+        return (
+          approval.kind === "question" &&
+          cohortKeys.has(key) &&
+          at >= (firstAttempts.get(key) ?? Infinity) &&
+          at <= now
+        );
+      })
+      .map((approval) => ownedKey(approval.userId, approval.applicationId)),
+  );
+  const cohortUsage = data.usage.filter(
+    (event) =>
+      event.applicationId &&
+      cohortKeys.has(ownedKey(event.userId, event.applicationId)) &&
+      safeDate(event.createdAt) <= now,
+  );
+  const cohortCost = cohortUsage.reduce(
+    (sum, event) => sum + Math.max(0, amount(event.costUsd)),
+    0,
+  );
+  const monthlyResumes = (data.resumes || []).filter(
+    (resume) => safeDate(resume.createdAt) >= start && safeDate(resume.createdAt) <= now,
+  );
+  const measuredGenerations = (data.actions || []).filter(
+    (action) =>
+      action.action === "resume_generation_measured" &&
+      (action.details.outcome === "succeeded" || action.details.outcome === "failed") &&
+      safeDate(action.createdAt) >= start &&
+      safeDate(action.createdAt) <= now,
+  );
+  const costAlerts = (data.actions || [])
+    .flatMap((action) => {
+      const alert = readCostAlert(action);
+      const at = safeDate(action.createdAt);
+      if (!alert || !Number.isFinite(at) || at < start || at > now) return [];
+      return [
+        {
+          ...alert,
+          observedAt: action.createdAt,
+          customer: createHash("sha256").update(action.userId).digest("hex").slice(0, 12),
+        },
+      ];
+    })
+    .sort((a, b) => b.observedAt.localeCompare(a.observedAt));
   const activeIds = new Set<string>();
   for (const item of [...data.profiles, ...data.runs, ...data.usage]) {
     const date =
@@ -163,6 +247,39 @@ export function aggregateAdmin(data: AdminData, options: AdminOptions) {
         (!sub.periodEnd || safeDate(sub.periodEnd) > now),
     ).length,
     nominalMrrUsd: nominalMrr,
+    outcomes: {
+      applicationCompletion: metric(
+        applicationCohort.filter(hasReceipt).length,
+        applicationCohort.length,
+      ),
+      submissionVerification: metric(
+        submissionCohort.filter(hasReceipt).length,
+        submissionCohort.length,
+      ),
+      clarificationFrequency: metric(clarified.size, applicationCohort.length),
+      resumeGeneration: metric(
+        measuredGenerations.filter((action) => action.details.outcome === "succeeded").length,
+        measuredGenerations.length,
+      ),
+      savedResumeValidation: metric(
+        monthlyResumes.filter((resume) => resume.validation.valid).length,
+        monthlyResumes.length,
+      ),
+      meanApplicationCostUsd: applicationCohort.length
+        ? cohortCost / applicationCohort.length
+        : null,
+      applicationCohortRecordedCostUsd: cohortCost,
+      applicationCostEstimateComplete:
+        (!cohortUsage.some((event) => event.kind === "model") || options.modelPricingConfigured) &&
+        (!cohortUsage.some((event) => event.kind === "browser") ||
+          options.browserPricingConfigured),
+      inProgressApplications: applicationCohort.filter(
+        (app) => !hasReceipt(app) && !["failed", "withdrawn", "rejected"].includes(app.status),
+      ).length,
+      clarificationTelemetryAvailable: data.approvals !== undefined,
+    },
+    costAlertCount: costAlerts.length,
+    costAlerts: costAlerts.slice(0, 50),
     attempts,
     verifiedSubmissions: verified.size,
     failedApplications: monthlyApplications.filter((app) => app.status === "failed").length,
@@ -222,7 +339,7 @@ export async function getAdminSnapshot(user: User | null): Promise<AdminSnapshot
     const db = localDb();
     const rows = db
       .prepare(
-        "SELECT collection,data FROM records WHERE collection IN('candidate_profiles','applications','agent_runs','usage_events','subscriptions','application_events')",
+        "SELECT collection,data FROM records WHERE collection IN('candidate_profiles','applications','agent_runs','usage_events','subscriptions','application_events','approval_requests','generated_resumes','agent_actions')",
       )
       .all() as { collection: string; data: string }[];
     const read = <T>(name: string) =>
@@ -239,9 +356,23 @@ export async function getAdminSnapshot(user: User | null): Promise<AdminSnapshot
       usage: read("usage_events"),
       subscriptions: read("subscriptions"),
       events: read("application_events"),
+      approvals: read("approval_requests"),
+      resumes: read("generated_resumes"),
+      actions: read("agent_actions"),
     };
   } else {
-    const [users, profiles, applications, runs, usage, subscriptions, events] = await Promise.all([
+    const [
+      users,
+      profiles,
+      applications,
+      runs,
+      usage,
+      subscriptions,
+      events,
+      approvals,
+      resumes,
+      actions,
+    ] = await Promise.all([
       supabaseService().from("users").select("id", { count: "exact", head: true }),
       remoteRows<ProfileRecord>("candidate_profiles"),
       remoteRows<Application>("applications"),
@@ -249,6 +380,9 @@ export async function getAdminSnapshot(user: User | null): Promise<AdminSnapshot
       remoteRows<UsageEvent>("usage_events"),
       remoteRows<Subscription>("subscriptions"),
       remoteRows<AppEvent>("application_events"),
+      remoteRows<Approval>("approval_requests"),
+      remoteRows<GeneratedResume>("generated_resumes"),
+      remoteRows<AuditAction>("agent_actions"),
     ]);
     if (users.error) throw users.error;
     data = {
@@ -259,6 +393,9 @@ export async function getAdminSnapshot(user: User | null): Promise<AdminSnapshot
       usage,
       subscriptions,
       events,
+      approvals,
+      resumes,
+      actions,
     };
   }
   const price = (name: string, fallback: number) => {

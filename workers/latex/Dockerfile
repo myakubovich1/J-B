@@ -11,7 +11,10 @@ COPY --from=fetch /usr/local/bin/tectonic /usr/local/bin/tectonic
 ENV XDG_CACHE_HOME=/opt/tectonic-cache HOME=/tmp TECTONIC_UNTRUSTED_MODE=1
 # Warm the package cache during image build; execution itself has no network.
 COPY workers/latex/warmup.tex /tmp/warmup.tex
-RUN tectonic -X compile --untrusted --keep-logs --outdir /tmp /tmp/warmup.tex && chmod -R a+rX /opt/tectonic-cache && rm -f /tmp/warmup.*
+RUN for point_size in 10 11 12; do \
+      sed "s/letterpaper,11pt/letterpaper,${point_size}pt/" /tmp/warmup.tex > "/tmp/warmup-${point_size}.tex"; \
+      tectonic -X compile --untrusted --keep-logs --outdir /tmp "/tmp/warmup-${point_size}.tex" || exit 1; \
+    done && chmod -R a+rX /opt/tectonic-cache && rm -f /tmp/warmup*
 USER 65532:65532
 WORKDIR /work
 ENTRYPOINT ["tectonic", "-X", "compile", "--untrusted", "--only-cached", "--keep-logs", "--outdir", "/work"]
