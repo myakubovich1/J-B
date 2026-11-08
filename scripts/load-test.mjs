@@ -116,7 +116,10 @@ async function virtualUser(index) {
       await client.until((s) => s.resumes.some((r) => r.validation.valid), "resume");
     });
     const approval = await lap("prepare", async () => {
-      await client.call("/api/workspace", { method: "POST", body: { action: "apply", url: fixture } });
+      await client.call("/api/workspace", {
+        method: "POST",
+        body: { action: "apply", url: fixture },
+      });
       return client.until(
         (s) => s.approvals.find((a) => a.kind === "submission" && a.status === "pending"),
         "prepare",
@@ -132,7 +135,10 @@ async function virtualUser(index) {
         "submit",
       );
     });
-    await client.call("/api/workspace", { method: "POST", body: { action: "apply", url: fixture } });
+    await client.call("/api/workspace", {
+      method: "POST",
+      body: { action: "apply", url: fixture },
+    });
     const final = await client.workspace();
     const invariants = {
       oneApplication: final.applications.length === 1,
@@ -164,9 +170,18 @@ const summary = {
   failed: results.length - passed.length,
   failureRate: (results.length - passed.length) / results.length,
   endToEndMs: {
-    p50: percentile(passed.map((r) => r.totalMs), 50),
-    p95: percentile(passed.map((r) => r.totalMs), 95),
-    max: percentile(passed.map((r) => r.totalMs), 100),
+    p50: percentile(
+      passed.map((r) => r.totalMs),
+      50,
+    ),
+    p95: percentile(
+      passed.map((r) => r.totalMs),
+      95,
+    ),
+    max: percentile(
+      passed.map((r) => r.totalMs),
+      100,
+    ),
   },
   stageMs: Object.fromEntries(
     stages.map((stage) => {
@@ -185,5 +200,6 @@ const summary = {
   errors: results.filter((r) => !r.ok).map((r) => r.error),
 };
 console.log(JSON.stringify(summary, null, 2));
-if (process.env.LOAD_REPORT) await writeFile(process.env.LOAD_REPORT, JSON.stringify(summary, null, 2));
+if (process.env.LOAD_REPORT)
+  await writeFile(process.env.LOAD_REPORT, JSON.stringify(summary, null, 2));
 process.exit(summary.failed ? 1 : 0);

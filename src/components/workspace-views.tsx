@@ -1349,7 +1349,7 @@ function AccountControls({ email }: { email: string }) {
             window.location.assign("/");
           }}
         >
-          <p>
+          <p className="helper-text">
             This permanently deletes your profile, resumes, applications, saved answers, evidence,
             and connected-account authorizations. Applications already sent to employers cannot be
             withdrawn by Waypoint. Cancel any paid subscription in billing first. Download your data

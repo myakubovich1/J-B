@@ -294,9 +294,24 @@ function fieldKey(
   return null;
 }
 
-async function setField(locator: Locator, value: string): Promise<boolean> {
-  const tag = await locator.evaluate((el) => el.tagName.toLowerCase());
-  const type = (await locator.getAttribute("type")) || "text";
+/** Fill and verify one field. A slow page can time out an action or re-render a value away,
+ * which would otherwise pause the application on a field the profile already answers; one
+ * idempotent retry absorbs that. Unsupported controls fail immediately. */
+export async function setField(locator: Locator, value: string): Promise<boolean> {
+  for (let attempt = 1; ; attempt++) {
+    const result = await setFieldOnce(locator, value);
+    if (result !== "retry" || attempt === 2) return result === true;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+async function setFieldOnce(locator: Locator, value: string): Promise<boolean | "retry"> {
+  let tag: string, type: string;
+  try {
+    tag = await locator.evaluate((el) => el.tagName.toLowerCase());
+    type = (await locator.getAttribute("type")) || "text";
+  } catch {
+    return "retry";
+  }
   try {
     if (tag === "select") {
       const options = await locator.locator("option").evaluateAll((elements) =>
@@ -312,18 +327,20 @@ async function setField(locator: Locator, value: string): Promise<boolean> {
       );
       if (!match) return false;
       await locator.selectOption(match.value);
-      return (await locator.inputValue()) === match.value;
+      return (await locator.inputValue()) === match.value || "retry";
     }
     if (type === "checkbox") {
       if (!["yes", "true", "no", "false"].includes(value.toLowerCase())) return false;
       await locator.setChecked(["yes", "true"].includes(value.toLowerCase()));
-      return (await locator.isChecked()) === ["yes", "true"].includes(value.toLowerCase());
+      return (
+        (await locator.isChecked()) === ["yes", "true"].includes(value.toLowerCase()) || "retry"
+      );
     }
     if (type === "radio") return false;
     await locator.fill(value);
-    return (await locator.inputValue()) === value;
+    return (await locator.inputValue()) === value || "retry";
   } catch {
-    return false;
+    return "retry";
   }
 }
 

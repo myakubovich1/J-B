@@ -9,7 +9,9 @@ import {
   formAnswers,
   questionContext,
   rememberedFieldAnswer,
+  setField,
 } from "../src/lib/browser";
+import { chromium } from "playwright";
 
 describe("browser least privilege", () => {
   it("requires exact allowed employer domains", () => {
@@ -121,4 +123,30 @@ describe("browser least privilege", () => {
       ),
     ).toBe("yes");
   });
+});
+
+describe("field filling under a slow page", () => {
+  it("retries a fill that a late re-render clears, and still refuses unsupported controls", async () => {
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      // The first value typed is wiped shortly afterwards, as a hydrating form would.
+      await page.setContent(`<form><input id="first" name="first_name">
+        <input id="choice" type="radio" name="choice"></form>
+        <script>
+          const input = document.getElementById("first");
+          let wiped = false;
+          input.addEventListener("input", () => {
+            if (!wiped) { wiped = true; setTimeout(() => { input.value = ""; }, 0); }
+          });
+        </script>`);
+      expect(await setField(page.locator("#first"), "Alex")).toBe(true);
+      expect(await page.locator("#first").inputValue()).toBe("Alex");
+      const started = Date.now();
+      expect(await setField(page.locator("#choice"), "yes")).toBe(false);
+      expect(Date.now() - started).toBeLessThan(400);
+    } finally {
+      await browser.close();
+    }
+  }, 30000);
 });

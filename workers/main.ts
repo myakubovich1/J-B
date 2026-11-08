@@ -52,7 +52,7 @@ async function lane(index: number): Promise<void> {
  * it. A crash after the submission latch resolves to `submission_unverified`, never a retry.
  */
 const watchdog = setInterval(() => {
-  const deadline = Date.now() - (leaseMs - 30000);
+  const deadline = Date.now() - Math.max(leaseMs * 0.8, leaseMs - 30000);
   if (!iterationStarted.some((at) => at !== null && at < deadline)) return;
   log("error", "worker_watchdog_exit", { leaseSeconds: leaseMs / 1000 });
   void sendOperationalAlert({

@@ -39,7 +39,7 @@ docker compose -f compose.worker.yml --profile tools build compiler-image
 docker compose -f compose.worker.yml up -d --build worker
 ```
 
-Docker socket access is root-equivalent for the trusted worker process. Isolate this host and never add that mount to the public web service. The untrusted compiler receives neither the socket nor secrets; it runs as a non-root UID matching the worker's temporary-directory owner, with private directory permissions and the restrictions above. An explicitly named compiler container is force-removed after timeout as well as normal completion. This host/container recipe is supplied for deployment review but was not executed here because the Docker daemon was unavailable.
+Docker socket access is root-equivalent for the trusted worker process. Isolate this host and never add that mount to the public web service. The untrusted compiler receives neither the socket nor secrets; it runs as a non-root UID matching the worker's temporary-directory owner, with private directory permissions and the restrictions above. An explicitly named compiler container is force-removed after timeout as well as normal completion. The compiler image and its sandbox suite have been executed on Docker Desktop (macOS); the `compose.worker.yml` worker recipe itself has not been run on a Linux host yet. Run the sandbox suite on the real worker host before admitting users, since isolation depends on that kernel and Docker version.
 
 Document extraction is also queued to the worker. The Vercel web process accepts a bounded private upload and persists a source/run, rather than relying on system Poppler binaries in a serverless request. Review completed extracted text through Career Profile → Saved sources.
 

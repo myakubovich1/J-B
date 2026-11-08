@@ -104,13 +104,11 @@ describe.skipIf(process.env.RUN_DOCKER_TESTS !== "1")("isolated LaTeX compiler",
   beforeAll(async () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = secret;
     process.env.STRIPE_SECRET_KEY = secret;
-    process.env.LATEX_TIMEOUT_MS = "10000";
     before = await compileDirectories();
   });
   afterAll(() => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     delete process.env.STRIPE_SECRET_KEY;
-    delete process.env.LATEX_TIMEOUT_MS;
   });
 
   it("runs unprivileged, offline, read-only, and without application secrets", async () => {
@@ -256,10 +254,12 @@ describe.skipIf(process.env.RUN_DOCKER_TESTS !== "1")("isolated LaTeX compiler",
   }, 60000);
 
   it("kills runaway compiles at the deadline and removes the container", async () => {
+    // A short deadline here only; legitimate compiles keep the default under contention.
+    process.env.LATEX_TIMEOUT_MS = "10000";
     const started = Date.now();
-    await expect(
-      compileLatex(document("\\def\\spin{\\spin}\\spin"), { custom: true }),
-    ).rejects.toThrow(/time limit/);
+    await expect(compileLatex(document("\\def\\spin{\\spin}\\spin"), { custom: true }))
+      .rejects.toThrow(/time limit/)
+      .finally(() => delete process.env.LATEX_TIMEOUT_MS);
     expect(Date.now() - started).toBeLessThan(25000);
     expect(await leftoverContainers()).toBe("");
   }, 60000);
