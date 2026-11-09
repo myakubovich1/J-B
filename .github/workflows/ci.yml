@@ -1,4 +1,4 @@
-name: Verify career agent
+name: Verify J*B
 on:
   push:
   pull_request:

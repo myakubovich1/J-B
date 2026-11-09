@@ -15,7 +15,7 @@ const tokenResponse = z.object({
   expires_in: z.number().optional(),
   scope: z.string().optional(),
 });
-const cookieName = "waypoint_oauth";
+const cookieName = "jb_oauth";
 function config(provider: Provider, privateRepos = false) {
   const tenant = process.env.MICROSOFT_TENANT_ID || "common";
   if (!/^[a-zA-Z0-9.-]+$/.test(tenant)) throw new Error("Invalid Microsoft tenant configuration.");
@@ -114,7 +114,7 @@ async function authorizedJson(url: string, accessToken: string) {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
-      "User-Agent": "Waypoint-career-agent",
+      "User-Agent": "JB-career-agent (+https://jasteriskb.com)",
     },
     signal: AbortSignal.timeout(15000),
     redirect: "error",
@@ -312,7 +312,7 @@ export async function revokeProviderGrant(provider: Provider, token: string): Pr
               Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`,
               Accept: "application/vnd.github+json",
               "Content-Type": "application/json",
-              "User-Agent": "Waypoint-career-agent",
+              "User-Agent": "JB-career-agent (+https://jasteriskb.com)",
             },
             body: JSON.stringify({ access_token: token }),
             signal: AbortSignal.timeout(15000),

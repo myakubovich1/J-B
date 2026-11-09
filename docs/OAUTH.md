@@ -1,6 +1,6 @@
 # OAuth and correspondence setup
 
-Connections are integrations within an already authenticated Waypoint account; they are not replacements for app sign-in. The callback checks the current user, provider, state cookie, encrypted one-time state, expiry, and PKCE verifier. State is consumed before code exchange. Tokens remain server-side in the secrets service. The browser receives only connection metadata.
+Connections are integrations within an already authenticated J*B account; they are not replacements for app sign-in. The callback checks the current user, provider, state cookie, encrypted one-time state, expiry, and PKCE verifier. State is consumed before code exchange. Tokens remain server-side in the secrets service. The browser receives only connection metadata.
 
 ## GitHub
 

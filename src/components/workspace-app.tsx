@@ -8,26 +8,22 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  CircleHelp,
-  Compass,
+  ExternalLink,
   FileText,
-  Github,
   LayoutGrid,
   Link2,
+  ListChecks,
   LoaderCircle,
-  LogOut,
   Menu,
   MessageSquare,
   Plus,
-  Search,
-  Send,
+  Radar,
   Settings,
   ShieldCheck,
-  Sparkles,
   UserRound,
   X,
-  Zap,
 } from "lucide-react";
+import { Asterisk, Logo } from "./brand";
 import type { Workspace } from "@/lib/workspace";
 import type {
   Application,
@@ -50,12 +46,12 @@ import { useModalFocus } from "./modal-focus";
 export type View =
   "agent" | "profile" | "resumes" | "applications" | "discover" | "integrations" | "settings";
 export type Action = (data: Record<string, unknown>, success?: string) => Promise<boolean>;
-const nav: [View, string, typeof Compass][] = [
-  ["agent", "Agent", Sparkles],
+const nav: [View, string, typeof Radar][] = [
+  ["agent", "Agent", MessageSquare],
   ["profile", "Career Profile", UserRound],
   ["resumes", "Resumes", FileText],
   ["applications", "Applications", BriefcaseBusiness],
-  ["discover", "Discover", Compass],
+  ["discover", "Discover", Radar],
 ];
 export const statusLabel = (s: string) =>
   ({
@@ -78,7 +74,7 @@ export const stageLabel = (s: string) =>
     reading_job: "Reading the job",
     evaluating: "Checking your fit",
     selecting_resume: "Choosing a template",
-    tailoring: "Tailoring your story",
+    tailoring: "Tailoring your resume",
     generating_pdf: "Generating your PDF",
     validating_resume: "Checking the details",
     opening_application: "Opening the application",
@@ -202,11 +198,8 @@ export function WorkspaceApp({ initial }: { initial: Workspace }) {
         />
       )}
       <aside inert={mobile && !menu} className={cn("sidebar", menu && "sidebar-open")}>
-        <a href="#agent" onClick={() => go("agent")} className="brand">
-          <span className="brand-icon">
-            <Compass size={22} />
-          </span>
-          waypoint<span className="brand-period">.</span>
+        <a href="#agent" onClick={() => go("agent")} className="brand" aria-label="J*B agent">
+          <Logo size={26} />
         </a>
         <Button
           variant="secondary"
@@ -240,15 +233,12 @@ export function WorkspaceApp({ initial }: { initial: Workspace }) {
           <div className="journey-card">
             <div className="flex-between">
               <span className="mini-icon">
-                <Compass size={16} />
+                <ListChecks size={16} />
               </span>
               <small>{complete}/5 complete</small>
             </div>
-            <h4>Your story starts here</h4>
-            <p>
-              A little more about you.
-              <br />A much better next move.
-            </p>
+            <h4>Set up your agent</h4>
+            <p>The more J*B knows, the better every application gets.</p>
             <div className="progress-track">
               <span style={{ width: `${complete * 20}%` }} />
             </div>
@@ -409,10 +399,11 @@ export function WorkspaceApp({ initial }: { initial: Workspace }) {
         <footer className="workspace-footer">
           <span>
             <ShieldCheck size={12} />
-            Your story. Your data. Your decision.
+            Private by default. You approve every submission.
           </span>
           <span>
-            Made for what’s next<span className="footer-star">✳</span>
+            <Asterisk size={11} className="footer-star" />
+            J*B · jasteriskb.com
           </span>
         </footer>
       </div>
@@ -444,7 +435,7 @@ export function WorkspaceApp({ initial }: { initial: Workspace }) {
           >
             <div className="modal-header">
               <div>
-                <div className="eyebrow">YOUR STORY, ON PAPER</div>
+                <div className="eyebrow">RESUME PREVIEW</div>
                 <h2>{preview.title}</h2>
               </div>
               <button
@@ -519,9 +510,6 @@ function AgentView({
     setStarted(true);
     if (await act({ action: "chat", message: text })) setMessage("");
   }
-  const inMotion = data.applications.filter(
-    (a) => !["withdrawn", "rejected", "offer", "failed"].includes(a.status),
-  );
   const pending = data.approvals.filter((a) => a.status === "pending");
   return (
     <div className="agent-layout">
@@ -529,31 +517,31 @@ function AgentView({
         <div className="agent-heading">
           <div>
             <div className="eyebrow">
-              <span className="tiny-line" />
-              YOUR PERSONAL CAREER AGENT
+              <Asterisk size={11} className="eyebrow-star" />
+              YOUR PERSONAL AI CAREER AGENT
             </div>
             <h1>
-              A little direction.
+              Hi {name}.
               <br />
-              <span>A world of possibility.</span>
+              <span>What should we apply to next?</span>
             </h1>
           </div>
           <div className="agent-status">
             <span className="status-dot" />
-            Ready when you are
+            Agent ready
           </div>
         </div>
         {data.messages.length === 0 ? (
           <div className="agent-welcome">
             <div className="greeting">
               <span className="agent-avatar">
-                <Sparkles size={19} />
+                <Asterisk size={16} color="#fff" />
               </span>
               <div>
-                <h3>Hey {name}, let’s make your next move.</h3>
+                <h3>Paste a job link and I’ll take it from there.</h3>
                 <p>
-                  Bring your experience. I’ll help you find the words,
-                  <br className="desktop-break" /> prepare your resume, and take the next step.
+                  I read the role, tailor your resume from facts you’ve confirmed, and prepare the
+                  application. Nothing is submitted until you approve it.
                 </p>
               </div>
             </div>
@@ -566,44 +554,32 @@ function AgentView({
                 }}
               >
                 <span className="starter-icon peach">
-                  <BriefcaseBusiness size={20} />
+                  <Link2 size={20} />
                 </span>
-                <h3>Have a role in mind?</h3>
-                <p>
-                  Drop in a job link. Let’s see
-                  <br />
-                  where it could take you.
-                </p>
+                <h3>Apply to a job</h3>
+                <p>Paste a Greenhouse or Lever link. I’ll prepare everything for your review.</p>
                 <ArrowRight size={18} />
               </button>
               <button className="starter-card" onClick={() => go("profile")}>
                 <span className="starter-icon sage">
                   <UserRound size={20} />
                 </span>
-                <h3>First, a little about you.</h3>
-                <p>
-                  Build your career profile.
-                  <br />
-                  Make every application count.
-                </p>
+                <h3>Build your profile</h3>
+                <p>Import a resume or GitHub repositories, then confirm what’s true.</p>
                 <ArrowRight size={18} />
               </button>
               <button className="starter-card" onClick={() => go("resumes")}>
                 <span className="starter-icon lavender">
                   <FileText size={20} />
                 </span>
-                <h3>Your story, well told.</h3>
-                <p>
-                  Choose a LaTeX template.
-                  <br />
-                  Put your best work on paper.
-                </p>
+                <h3>Pick a resume template</h3>
+                <p>Jake’s Resume and five more LaTeX templates, by career track.</p>
                 <ArrowRight size={18} />
               </button>
             </div>
             <div className="agent-note">
               <ShieldCheck size={16} />
-              <span>I use the facts you confirm. You stay in control of every application.</span>
+              <span>I only use facts you confirm. You stay in control of every application.</span>
             </div>
           </div>
         ) : (
@@ -614,11 +590,11 @@ function AgentView({
                 className={cn("chat-message", m.role === "user" ? "message-user" : "message-agent")}
               >
                 <span className={m.role === "user" ? "avatar avatar-small" : "agent-avatar"}>
-                  {m.role === "user" ? name.slice(0, 1) : <Sparkles size={17} />}
+                  {m.role === "user" ? name.slice(0, 1) : <Asterisk size={14} color="#fff" />}
                 </span>
                 <div>
                   <div className="message-author">
-                    {m.role === "user" ? "You" : "Waypoint"}
+                    {m.role === "user" ? "You" : "J*B"}
                     <span>
                       {clientTime
                         ? new Date(m.createdAt).toLocaleTimeString("en-US", {
@@ -679,7 +655,7 @@ function AgentView({
                     void send();
                   }
                 }}
-                placeholder="Paste a job link. Let’s take it from here."
+                placeholder="Paste a job link, or ask your agent anything…"
                 rows={2}
                 maxLength={5000}
               />
@@ -694,7 +670,8 @@ function AgentView({
             </div>
             <div className="composer-bottom">
               <span>
-                <Sparkles size={12} />A thoughtful next step
+                <Asterisk size={11} />
+                J*B agent
               </span>
               <span>↵ to send</span>
             </div>
@@ -718,96 +695,229 @@ function AgentView({
           )}
         </div>
       </section>
-      <aside className="agent-context">
-        <div className="context-title">
-          A CLEARER PICTURE
-          <span className="context-line" />
-        </div>
-        <Card className="profile-context">
-          <div className="profile-context-art" aria-hidden="true">
-            <div className="profile-art-ring" />
-            <span className="profile-art-orbit" />
-            <span className="profile-art-letter">{name[0]?.toUpperCase()}</span>
-            <span className="profile-art-spark">✳</span>
+      <AgentContext data={data} name={name} go={go} openApp={openApp} preview={preview} />
+    </div>
+  );
+}
+
+const flow: { label: string; done: (app: Application, stage: string) => boolean }[] = [
+  { label: "Job read", done: (a) => Boolean(a.job) },
+  { label: "Resume tailored", done: (a) => Boolean(a.resumeId) },
+  {
+    label: "Application filled",
+    done: (a, s) =>
+      Boolean(a.preparedFields && Object.keys(a.preparedFields).length) ||
+      ["awaiting_approval", "submitting", "verifying", "completed"].includes(s),
+  },
+  {
+    label: "Your approval",
+    done: (a) => Boolean(a.submissionStartedAt || a.receipt),
+  },
+  { label: "Submitted & verified", done: (a) => Boolean(a.receipt) },
+];
+
+/** Right panel: the application in focus, or the profile when nothing is in motion. */
+function AgentContext({
+  data,
+  name,
+  go,
+  openApp,
+  preview,
+}: {
+  data: Workspace;
+  name: string;
+  go: (v: View) => void;
+  openApp: (id: string) => void;
+  preview: (r: GeneratedResume) => void;
+}) {
+  const inMotion = data.applications.filter(
+    (a) => !["withdrawn", "rejected", "offer", "failed"].includes(a.status),
+  );
+  const pendingApp = data.approvals.find((a) => a.status === "pending")?.applicationId;
+  const focus =
+    data.applications.find((a) => a.id === pendingApp) ?? inMotion[0] ?? data.applications[0];
+  const resume = focus && data.resumes.find((r) => r.id === focus.resumeId);
+  const run = focus && data.runs.find((r) => r.id === focus.runId);
+  const template = resume && data.templates.find((t) => t.id === resume.templateId);
+  const firstOpen = focus ? flow.findIndex((f) => !f.done(focus, run?.stage ?? "")) : -1;
+  return (
+    <aside className="agent-context" aria-label="Application context">
+      {focus ? (
+        <>
+          <div className="context-title">
+            {focus.id === pendingApp ? "NEEDS YOUR REVIEW" : "CURRENT APPLICATION"}
+            <span className="context-line" />
           </div>
-          <div className="flex-between">
-            <span className="eyebrow">YOUR CAREER PROFILE</span>
-            <span className="mini-status">
-              {data.profileVersion ? "In progress" : "Let’s begin"}
-            </span>
-          </div>
-          <h3>{data.profile.legalName || "Uniquely you."}</h3>
-          <p>
-            {data.profile.headline ||
-              "Your experience, strengths, and ambitions. All in one place."}
-          </p>
-          <div className="profile-detail-row">
-            <span>Career direction</span>
-            <strong>{trackName(data.profile.preferences.tracks[0] ?? "general")}</strong>
-          </div>
-          <button className="text-link" onClick={() => go("profile")}>
-            {data.profileVersion ? "Keep your profile current" : "Tell your story"}
-            <ArrowRight size={14} />
-          </button>
-        </Card>
-        <div className="context-heading">
-          <h3>Your next moves</h3>
-          <span>{inMotion.length}</span>
-        </div>
-        {inMotion.length ? (
-          <div className="next-moves">
-            {inMotion.slice(0, 3).map((a) => (
-              <button key={a.id} onClick={() => openApp(a.id)}>
-                <span className="company-monogram">{a.job?.company[0] ?? "↗"}</span>
-                <span>
-                  <strong>{a.job?.title ?? "Reading your job link"}</strong>
-                  <small>
-                    {a.job?.company ?? new URL(a.jobUrl).hostname} · {statusLabel(a.status)}
-                  </small>
+          <Card className="context-job">
+            <div className="flex-between">
+              <span className="company-monogram">{focus.job?.company[0] ?? "↗"}</span>
+              <Badge tone={focus.receipt ? "green" : focus.status === "failed" ? "red" : "orange"}>
+                {statusLabel(focus.status)}
+              </Badge>
+            </div>
+            <h3>{focus.job?.title ?? "Reading your job link"}</h3>
+            <p>
+              {focus.job?.company ?? new URL(focus.jobUrl).hostname}
+              {focus.job?.location ? ` · ${focus.job.location}` : ""}
+            </p>
+            <a className="text-link" href={focus.jobUrl} target="_blank" rel="noreferrer">
+              Original posting
+              <ExternalLink size={12} />
+            </a>
+          </Card>
+          {focus.matchScore !== null && (
+            <Card className="context-match">
+              <div className="flex-between">
+                <span className="context-label">Candidate match</span>
+                <strong>{focus.matchScore}%</strong>
+              </div>
+              <div className="progress-track">
+                <span style={{ width: `${Math.max(4, Math.min(100, focus.matchScore))}%` }} />
+              </div>
+              {focus.matchReasons.length > 0 && (
+                <ul className="reason-list">
+                  {focus.matchReasons.slice(0, 3).map((r, i) => (
+                    <li key={i}>
+                      <Check size={13} />
+                      {r}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
+          <Card className="context-resume">
+            <span className="context-label">Tailored resume</span>
+            {resume ? (
+              <button className="context-resume-button" onClick={() => preview(resume)}>
+                <span className="context-paper" aria-hidden="true">
+                  {template && !template.custom ? (
+                    <img src={`/templates/${template.id}.png`} alt="" />
+                  ) : (
+                    <FileText size={22} />
+                  )}
                 </span>
-                <ChevronRight size={14} />
+                <span>
+                  <strong>{resume.title}</strong>
+                  <small>
+                    {template?.name ?? "Custom template"} · {resume.validation.pages} page ·{" "}
+                    {resume.validation.valid ? "Validated" : "Needs review"}
+                  </small>
+                  <em>Open the exact PDF</em>
+                </span>
               </button>
-            ))}
+            ) : (
+              <p className="muted">Your resume appears here once it’s tailored.</p>
+            )}
+          </Card>
+          <Card className="context-steps">
+            <span className="context-label">Submission status</span>
+            <ol>
+              {flow.map((f, i) => {
+                const done = f.done(focus, run?.stage ?? "");
+                return (
+                  <li
+                    key={f.label}
+                    className={done ? "step-done" : i === firstOpen ? "step-current" : ""}
+                  >
+                    <span>{done ? <Check size={11} /> : i + 1}</span>
+                    {f.label}
+                  </li>
+                );
+              })}
+            </ol>
+            {focus.receipt && <p className="context-receipt">{focus.receipt.confirmation}</p>}
+            <button className="text-link" onClick={() => openApp(focus.id)}>
+              Full application details
+              <ArrowRight size={13} />
+            </button>
+          </Card>
+          {inMotion.length > 1 && (
+            <>
+              <div className="context-heading">
+                <h3>Also in motion</h3>
+                <span>{inMotion.length - 1}</span>
+              </div>
+              <div className="next-moves">
+                {inMotion
+                  .filter((a) => a.id !== focus.id)
+                  .slice(0, 3)
+                  .map((a) => (
+                    <button key={a.id} onClick={() => openApp(a.id)}>
+                      <span className="company-monogram">{a.job?.company[0] ?? "↗"}</span>
+                      <span>
+                        <strong>{a.job?.title ?? "Reading your job link"}</strong>
+                        <small>
+                          {a.job?.company ?? new URL(a.jobUrl).hostname} · {statusLabel(a.status)}
+                        </small>
+                      </span>
+                      <ChevronRight size={14} />
+                    </button>
+                  ))}
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="context-title">
+            YOUR CAREER PROFILE
+            <span className="context-line" />
           </div>
-        ) : (
+          <Card className="profile-context">
+            <div className="profile-context-art" aria-hidden="true">
+              <span className="profile-art-letter">{name[0]?.toUpperCase()}</span>
+              <Asterisk size={18} className="profile-art-spark" />
+            </div>
+            <div className="flex-between">
+              <span className="eyebrow">CAREER PROFILE</span>
+              <span className="mini-status">
+                {data.profileVersion ? "In progress" : "Not started"}
+              </span>
+            </div>
+            <h3>{data.profile.legalName || "Tell J*B about you"}</h3>
+            <p>
+              {data.profile.headline ||
+                "Your experience, skills, and preferences. The source of truth for every application."}
+            </p>
+            <div className="profile-detail-row">
+              <span>Career track</span>
+              <strong>{trackName(data.profile.preferences.tracks[0] ?? "general")}</strong>
+            </div>
+            <button className="text-link" onClick={() => go("profile")}>
+              {data.profileVersion ? "Update your profile" : "Build your profile"}
+              <ArrowRight size={14} />
+            </button>
+          </Card>
           <div className="next-move-empty">
             <span className="dotted-route">
               <i />
               <span />
               <i />
             </span>
-            <h4>Something good is on its way.</h4>
-            <p>
-              Your applications and next steps
-              <br />
-              will find a home right here.
-            </p>
+            <h4>No applications yet</h4>
+            <p>Paste a job link in the chat. Job details, your match, and status will show here.</p>
           </div>
-        )}
-        <div className="quiet-tip">
-          <span className="eyebrow">A SMALL REMINDER</span>
-          <p>“You don’t have to see the whole staircase. Just take the first step.”</p>
-          <span>One opportunity at a time.</span>
+        </>
+      )}
+      <div className="context-usage">
+        <div className="flex-between">
+          <span>
+            {data.billing.used} of {data.billing.limit} applications
+          </span>
+          <small>This month</small>
         </div>
-        <div className="context-usage">
-          <div className="flex-between">
-            <span>
-              {data.billing.used} of {data.billing.limit} applications
-            </span>
-            <small>This month</small>
-          </div>
-          <div className="progress-track">
-            <span
-              style={{ width: `${Math.min(100, (data.billing.used / data.billing.limit) * 100)}%` }}
-            />
-          </div>
-          <button className="text-link" onClick={() => go("settings")}>
-            Room for a bigger next chapter
-            <ArrowRight size={12} />
-          </button>
+        <div className="progress-track">
+          <span
+            style={{ width: `${Math.min(100, (data.billing.used / data.billing.limit) * 100)}%` }}
+          />
         </div>
-      </aside>
-    </div>
+        <button className="text-link" onClick={() => go("settings")}>
+          Plans & usage
+          <ArrowRight size={12} />
+        </button>
+      </div>
+    </aside>
   );
 }
 export function trackName(t: string) {

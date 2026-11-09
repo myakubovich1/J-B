@@ -13,7 +13,7 @@ const bucket = () => process.env.SUPABASE_STORAGE_BUCKET || "career-artifacts";
 const BILLABLE = ["active", "trialing", "past_due", "unpaid"];
 
 export type AccountExport = {
-  format: "waypoint-account-export";
+  format: "jb-account-export";
   version: 1;
   exportedAt: string;
   account: User;
@@ -33,7 +33,7 @@ export async function exportAccount(user: User): Promise<AccountExport> {
         : rows;
   }
   return {
-    format: "waypoint-account-export",
+    format: "jb-account-export",
     version: 1,
     exportedAt: new Date().toISOString(),
     account: { id: user.id, email: user.email, name: user.name },

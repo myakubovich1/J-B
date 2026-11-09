@@ -43,7 +43,7 @@ async function usage(app: Application, costUsd: number, overrides: Partial<Usage
   });
 }
 beforeEach(() => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), "waypoint-observability-"));
+  const directory = mkdtempSync(path.join(os.tmpdir(), "jb-observability-"));
   directories.push(directory);
   vi.stubEnv("APP_MODE", "local");
   vi.stubEnv("DATA_DIR", directory);

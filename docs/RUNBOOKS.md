@@ -22,7 +22,7 @@ Each environment (staging, production) has its **own** Supabase project, Stripe 
 - Point an external uptime monitor at `/api/ready` every minute and alert on non-200 **or** a `degraded` worker check lasting more than 5 minutes.
 - Workers upsert `worker_heartbeats` every 15 s. A worker is stale after 90 s.
 - External alerts (`src/lib/alerts.ts`) are sent for: `submission_unverified` (critical), `worker_failing` (5 consecutive iteration failures), `worker_watchdog_exit`, `emergency_stop_engaged`, `stripe_webhook_failed`, and first crossings of `cost_monthly_budget` / `cost_expensive_application`. Every alert is also logged as `operational_alert`; delivery failures log `alert_delivery_failed`. Route those log events to the same channel as a fallback.
-- Verify the signature: `HMAC_SHA256(ALERT_WEBHOOK_SECRET, "<X-Waypoint-Timestamp>.<raw body>")` equals `X-Waypoint-Signature` without the `sha256=` prefix; reject timestamps older than 5 minutes.
+- Verify the signature: `HMAC_SHA256(ALERT_WEBHOOK_SECRET, "<X-JB-Timestamp>.<raw body>")` equals `X-JB-Signature` without the `sha256=` prefix; reject timestamps older than 5 minutes.
 
 ## Deployment (staging first, then production) — unrehearsed on hosted infrastructure
 

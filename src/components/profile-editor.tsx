@@ -110,8 +110,8 @@ export function ProfileEditor({
     <div className="page-content profile-page">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">THE FOUNDATION FOR WHAT’S NEXT</div>
-          <h1>Your career, in your words.</h1>
+          <div className="eyebrow">CAREER PROFILE</div>
+          <h1>Your career profile</h1>
           <p>A clear picture of you makes every next step more personal.</p>
         </div>
         <div className="heading-actions">
@@ -133,7 +133,9 @@ export function ProfileEditor({
         <span className="profile-overview-avatar">{profile.legalName.slice(0, 1) || "Y"}</span>
         <div>
           <h2>{profile.legalName || "Let’s start with you."}</h2>
-          <p>{profile.headline || "Add the experiences that make your story yours."}</p>
+          <p>
+            {profile.headline || "The confirmed facts J*B uses in every resume and application."}
+          </p>
         </div>
         <Badge tone={dirty ? "orange" : "green"}>
           {dirty
@@ -164,7 +166,7 @@ export function ProfileEditor({
           {tab === 0 && (
             <Card className="form-card">
               <div className="section-intro">
-                <h2>Nice to meet you.</h2>
+                <h2>Basics</h2>
                 <p>The basics, so every application starts with the right details.</p>
               </div>
               <div className="form-grid">
@@ -248,7 +250,7 @@ export function ProfileEditor({
               <Card className="form-card">
                 <div className="section-intro flex-between">
                   <div>
-                    <h2>Your education.</h2>
+                    <h2>Education</h2>
                     <p>Where you’ve learned, and where you’re headed.</p>
                   </div>
                   <Button
@@ -335,7 +337,7 @@ export function ProfileEditor({
               <Card className="form-card">
                 <div className="section-intro flex-between">
                   <div>
-                    <h2>Experience that matters.</h2>
+                    <h2>Experience</h2>
                     <p>Work, internships, research, leadership, and volunteering.</p>
                   </div>
                   <Button
@@ -447,7 +449,7 @@ export function ProfileEditor({
               <Card className="form-card">
                 <div className="section-intro flex-between">
                   <div>
-                    <h2>Things you’ve made happen.</h2>
+                    <h2>Projects</h2>
                     <p>Projects that show your contribution and initiative.</p>
                   </div>
                   <Button
@@ -591,7 +593,7 @@ export function ProfileEditor({
               </Card>
               <Card className="form-card">
                 <div className="section-intro">
-                  <h2>Your strengths.</h2>
+                  <h2>Skills</h2>
                   <p>Skills you’re comfortable representing in an application.</p>
                 </div>
                 <Field label="Skills (comma separated)">
@@ -608,7 +610,7 @@ export function ProfileEditor({
               </Card>
               <Card className="form-card">
                 <div className="section-intro">
-                  <h2>Your evidence bank.</h2>
+                  <h2>Evidence bank</h2>
                   <p>Imported claims become usable after you review and confirm them.</p>
                 </div>
                 {!profile.claims.filter((c) => !c.id.startsWith("profile:")).length && (
@@ -672,8 +674,8 @@ export function ProfileEditor({
             <>
               <Card className="form-card">
                 <div className="section-intro">
-                  <h2>What does your next chapter look like?</h2>
-                  <p>Give your agent a little direction.</p>
+                  <h2>Job preferences</h2>
+                  <p>Tell J*B which roles, locations, and tracks to focus on.</p>
                 </div>
                 <Field label="Career directions">
                   <div className="choice-grid">
@@ -825,7 +827,7 @@ export function ProfileEditor({
               </Card>
               <Card className="form-card">
                 <div className="section-intro">
-                  <h2>A few important details.</h2>
+                  <h2>Work eligibility</h2>
                   <p>Eligibility is always based on your confirmation, never assumptions.</p>
                 </div>
                 <Field label="Country these answers apply to">
@@ -1043,7 +1045,7 @@ export function ProfileEditor({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-header">
-              <h2>Your sources, kept together.</h2>
+              <h2>Imported sources</h2>
               <button
                 className="icon-button"
                 aria-label="Close sources"
@@ -1093,7 +1095,7 @@ export function ProfileEditor({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-header">
-              <h2>A record of your story.</h2>
+              <h2>Version history</h2>
               <button
                 className="icon-button"
                 aria-label="Close history"

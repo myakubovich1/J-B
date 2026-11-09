@@ -5,7 +5,7 @@ import type { Workspace } from "../src/lib/workspace";
 test("structured import requires edited record review and explicit profile save", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/signup");
   await page.getByLabel("Your name", { exact: true }).fill("Import Fixture");
   await page
     .getByLabel("Email address", { exact: true })

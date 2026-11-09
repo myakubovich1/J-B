@@ -31,7 +31,7 @@ test("customer can export data, end every session, and delete the account", asyn
   const download = page.waitForEvent("download");
   await page.getByRole("link", { name: "Download my data" }).click();
   const exported = JSON.parse(await readFile((await (await download).path())!, "utf8"));
-  expect(exported.format).toBe("waypoint-account-export");
+  expect(exported.format).toBe("jb-account-export");
   expect(exported.account.email).toBe(email);
   expect(JSON.stringify(exported)).not.toContain(neighborEmail);
 

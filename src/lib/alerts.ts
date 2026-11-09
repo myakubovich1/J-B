@@ -15,7 +15,7 @@ export type OperationalAlert = {
 const recent = new Map<string, number>();
 /** Pseudonymous customer reference for alerts and logs; matches no stored identifier. */
 export function customerRef(userId: string): string {
-  return createHash("sha256").update(`waypoint-customer:${userId}`).digest("hex").slice(0, 16);
+  return createHash("sha256").update(`jb-customer:${userId}`).digest("hex").slice(0, 16);
 }
 export function alertingConfigured(): boolean {
   return Boolean(process.env.ALERT_WEBHOOK_URL);
@@ -27,7 +27,7 @@ function log(level: "info" | "error", event: string, extra: Record<string, unkno
 /**
  * Deliver an operator alert to `ALERT_WEBHOOK_URL` (Slack-compatible `text` plus structured
  * fields). Bodies are signed with HMAC-SHA256 of `${timestamp}.${body}` in
- * `X-Waypoint-Signature` when `ALERT_WEBHOOK_SECRET` is set. Delivery is best effort with
+ * `X-JB-Signature` when `ALERT_WEBHOOK_SECRET` is set. Delivery is best effort with
  * bounded retries; every alert is also written to the structured log, so log-based monitoring
  * still sees it if the webhook is down. Never throws into the caller's workflow.
  */
@@ -63,10 +63,10 @@ export async function sendOperationalAlert(
   const timestamp = String(Math.floor(now / 1000));
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "X-Waypoint-Timestamp": timestamp,
+    "X-JB-Timestamp": timestamp,
   };
   if (process.env.ALERT_WEBHOOK_SECRET)
-    headers["X-Waypoint-Signature"] =
+    headers["X-JB-Signature"] =
       `sha256=${createHmac("sha256", process.env.ALERT_WEBHOOK_SECRET).update(`${timestamp}.${body}`).digest("hex")}`;
   const attempts = Math.max(1, options.attempts ?? 3);
   for (let attempt = 1; attempt <= attempts; attempt++) {

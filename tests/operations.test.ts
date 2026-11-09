@@ -328,8 +328,8 @@ describe("operations", () => {
     };
     expect(await sendOperationalAlert(alert)).toBe("delivered");
     const { headers, body } = calls[0];
-    expect(headers["X-Waypoint-Signature"]).toBe(
-      `sha256=${createHmac("sha256", "alert-secret").update(`${headers["X-Waypoint-Timestamp"]}.${body}`).digest("hex")}`,
+    expect(headers["X-JB-Signature"]).toBe(
+      `sha256=${createHmac("sha256", "alert-secret").update(`${headers["X-JB-Timestamp"]}.${body}`).digest("hex")}`,
     );
     expect(JSON.parse(body)).toMatchObject({
       event: "submission_unverified",

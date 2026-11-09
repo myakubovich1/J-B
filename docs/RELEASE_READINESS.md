@@ -1,6 +1,6 @@
 # Release gate register
 
-Last updated: 2026-11-08 (UTC). Branch `release/waypoint-staging`. Owner of every open item: the product owner unless stated.
+Last updated: 2026-11-09 (UTC). Branch `main` of `~/Projects/jasteriskb` (the J*B rebrand `6d230de` merged into the 2026-11-08 release work). Owner of every open item: the product owner unless stated.
 
 **Status vocabulary.** *Implemented* — code exists, not independently verified. *Locally verified* — executed and passing on the development host (macOS, Node 24.22, Docker Desktop 28.4, local SQLite or embedded PostgreSQL); never hosted. *Staging verified* / *Production verified* — executed against that hosted environment. *Blocked* — cannot be verified without an external dependency named in the row. *Excluded* — deliberately outside the first supported release.
 
@@ -17,6 +17,7 @@ Last updated: 2026-11-08 (UTC). Branch `release/waypoint-staging`. Owner of ever
 | Final E2E | `npm run test:e2e:local` | 10 passed (8 baseline + account lifecycle + health) |
 | Final build / audit / format | `npm run build`; `npm audit --audit-level=high`; `prettier --check` | build pass; 0 vulnerabilities; all files formatted except `src/app/globals.css`, which was already unformatted in the recovered baseline |
 | Docker sandbox | `RUN_DOCKER_TESTS=1 npx vitest run tests/latex-sandbox.test.ts` | 22 passed against image `career-latex:local` built from `workers/latex/Dockerfile` |
+| Post-merge (J*B rebrand into release work, 2026-11-09) | `RUN_LATEX_TESTS=1 RUN_DOCKER_TESTS=1 npx vitest run`; `npm run test:e2e:local`; `npm run build`; `prettier --check` | 182 passed, 1 skipped; E2E 10 passed; build pass; all files formatted (`globals.css` included); 0 vulnerabilities |
 | Load rehearsal | `scripts/load-test.mjs` (see G-49) | 8 users: 8/8 in 68 s; 16 users: 16/16 in 142 s; 0 failures after fixes |
 | Crash recovery | scripted SIGKILL of the worker (see G-18) | Kill during preparation: reclaimed after 30 s lease, submitted once, billed once. Kill after submission latch: `submission_unverified`, not retried, not billed, reservation held, signed critical alert delivered to a local webhook receiver |
 
@@ -24,7 +25,7 @@ Last updated: 2026-11-08 (UTC). Branch `release/waypoint-staging`. Owner of ever
 
 | ID | Requirement | Current implementation | Defect / missing work | Acceptance criteria | Verification | Result | Status | Remaining dependency |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| G-01 | Reproducible baseline | Canonical source in the iCloud `J*B` folder had uncommitted Nov 4 work on top of `c03976e` and evicted (dataless) files that stall shell reads | Recovered into ordinary-path worktree `~/Projects/waypoint` (commit `ddf4d4e`) with copy-on-write identical locked deps | Same lockfile; baseline numbers reproduced or discrepancies explained | Evidence index above | Reproduced; one environmental discrepancy explained | Locally verified | Canonical folder must receive these commits (see PROGRESS) |
+| G-01 | Reproducible baseline | Canonical source in the iCloud `J*B` folder had uncommitted Nov 4 work on top of `c03976e` and evicted (dataless) files that stall shell reads | Recovered into `~/Projects/jasteriskb` (commit `ddf4d4e`) with copy-on-write identical locked deps; on 2026-11-09 the rebrand and release branches were merged into `main`, the single authoritative branch | Same lockfile; baseline numbers reproduced or discrepancies explained | Evidence index above | Reproduced; one environmental discrepancy explained | Locally verified | — (iCloud folder is a mirror of `main`; see PROGRESS) |
 | G-02 | Migrations apply cleanly | Two forward-only migrations | Test applied only the first file; now applies all in order | All migrations apply on PostgreSQL | `tests/postgres.test.ts` (PGlite) | 6/6 | Locally verified (core SQL only; Vault/Auth/Storage are stubs) | Disposable Supabase project; `supabase db push --dry-run` then push |
 | G-03 | Tenant isolation & RLS | Owner-filtered store; RLS select-own policies; privileged mutations service-only; composite FKs | — | Cross-tenant reads return nothing; client roles cannot mutate or call privileged RPCs | PGlite RLS tests; E2E tenant-boundary tests; store tests | pass | Locally verified | Hosted: `RUN_SUPABASE_INTEGRATION=true` test + database advisors on staging |
 | G-04 | Supabase Auth (signup, confirmation, callback, session refresh) | Implemented via `@supabase/ssr` | — | Confirmation link signs in; sessions refresh via proxy | Staging smoke test | not run | Blocked | Supabase project + SMTP provider |
@@ -128,7 +129,7 @@ The original build brief was not available (not in the repository; a search of l
 
 ## Owner decisions required
 
-1. Product name for release: source and this branch say **Waypoint**; an unmerged local commit (`6d230de`, branch `jb-rebrand` in `~/Projects/jasteriskb`) renames it to J*B.
+1. ~~Product name for release~~ — resolved 2026-11-09: **J*B**. The rebrand is merged into `main`; database tables, env vars, migrations, the `career-latex` image and the `career-artifacts` bucket keep their original names.
 2. Hosting: Supabase plan (PITR/backups), web host (Vercel vs container), Linux worker host, regions.
 3. Billing policy: prices, plan limits, trials, payment-failure grace period, refunds, and whether deletion should cancel subscriptions automatically (currently it refuses until the customer cancels).
 4. Data retention periods for evidence, resumes, applications, and logs.
