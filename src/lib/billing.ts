@@ -76,7 +76,7 @@ function planFromPrice(price: string): PlanId {
   return "free";
 }
 export async function reconcileSubscription(subscription: Stripe.Subscription): Promise<void> {
-  const userId = subscription.metadata.career_user_id;
+  const userId = subscription.metadata.jb_user_id;
   if (!userId || !/^[a-zA-Z0-9_-]{1,100}$/.test(userId)) return;
   const store = getStore();
   const existing = (await store.list("subscriptions", userId))[0];
@@ -122,7 +122,7 @@ export async function createCheckout(
     state.subscription?.customerId ||
     (
       await client.customers.create(
-        { email, metadata: { career_user_id: userId } },
+        { email, metadata: { jb_user_id: userId } },
         { idempotencyKey: `customer-${userId}` },
       )
     ).id;
@@ -140,7 +140,7 @@ export async function createCheckout(
           quantity: 1,
         },
       ],
-      subscription_data: { metadata: { career_user_id: userId } },
+      subscription_data: { metadata: { jb_user_id: userId } },
       success_url: `${process.env.APP_URL || "http://127.0.0.1:3000"}/?billing=success#settings`,
       cancel_url: `${process.env.APP_URL || "http://127.0.0.1:3000"}/?billing=cancelled#settings`,
     },

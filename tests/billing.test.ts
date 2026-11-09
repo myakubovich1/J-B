@@ -88,7 +88,7 @@ describe("billing enforcement", () => {
         id,
         status,
         customer: "cus_resubscribed",
-        metadata: { career_user_id: "resubscribed" },
+        metadata: { jb_user_id: "resubscribed" },
         items: { data: [{ price: { id: price }, current_period_end: future }] },
       }) as never;
     const remote: Record<string, unknown> = {
@@ -125,7 +125,7 @@ describe("billing enforcement", () => {
       id: "sub_dunning",
       status,
       customer: "cus_dunning",
-      metadata: { career_user_id: "dunning" },
+      metadata: { jb_user_id: "dunning" },
       items: { data: [{ price: { id: "price_fixture_pro" }, current_period_end: future }] },
     })) as never);
     const updated = {

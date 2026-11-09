@@ -40,10 +40,10 @@ Preconditions: CI green on the exact commit (`typecheck`, `npm test` with `RUN_L
    Migrations must be additive/backward compatible with the currently deployed code (expand → deploy → contract in a later release). Both current migrations are additive.
 4. **Build the compiler image** on the worker host and run the sandbox suite there:
    ```sh
-   docker build -f workers/latex/Dockerfile -t career-latex:<git-sha> .
-   RUN_DOCKER_TESTS=1 LATEX_DOCKER_IMAGE=career-latex:<git-sha> npx vitest run tests/latex-sandbox.test.ts
+   docker build -f workers/latex/Dockerfile -t jb-latex:<git-sha> .
+   RUN_DOCKER_TESTS=1 LATEX_DOCKER_IMAGE=jb-latex:<git-sha> npx vitest run tests/latex-sandbox.test.ts
    ```
-   Set `LATEX_DOCKER_IMAGE=career-latex:<git-sha>` for the worker. Never deploy an image whose sandbox suite has not passed on that host's kernel and Docker version.
+   Set `LATEX_DOCKER_IMAGE=jb-latex:<git-sha>` for the worker. Never deploy an image whose sandbox suite has not passed on that host's kernel and Docker version.
 5. **Deploy the worker** (`docker compose -f compose.worker.yml up -d --build worker`) with `APP_VERSION=<git-sha>`. Confirm a fresh heartbeat in `/api/ready` details.
 6. **Deploy the web app** (Vercel promotion or new image) with `APP_VERSION=<git-sha>`.
 7. **Smoke test**: `/api/ready` is `ok`; sign up a staging test account; save a profile; generate a resume (worker compile in Docker); for staging only, run a non-submitting ATS diagnostic; open `/admin` as an operator; then delete the test account from Settings.
@@ -75,7 +75,7 @@ Severity: **SEV1** possible unauthorized or duplicate employer submission, cross
 
 ## Backup and restore
 
-**Supabase (unrehearsed)** — Database backups depend on the Supabase plan (daily backups; point-in-time recovery is an add-on): choose and document the RPO/RTO. Database backups do **not** include Storage object bytes: schedule a separate copy of the `career-artifacts` bucket (e.g. S3-compatible sync to an encrypted, access-restricted location with the same retention as the database). Vault secrets are restored with the database; if a restore is to a different project, integrations must be reconnected.
+**Supabase (unrehearsed)** — Database backups depend on the Supabase plan (daily backups; point-in-time recovery is an add-on): choose and document the RPO/RTO. Database backups do **not** include Storage object bytes: schedule a separate copy of the `jb-artifacts` bucket (e.g. S3-compatible sync to an encrypted, access-restricted location with the same retention as the database). Vault secrets are restored with the database; if a restore is to a different project, integrations must be reconnected.
 
 Restore rehearsal (quarterly and before launch):
 1. Restore the latest backup into a new disposable project; copy the Storage snapshot into its bucket.

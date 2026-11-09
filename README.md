@@ -39,7 +39,7 @@ Template gallery previews in `public/templates/` are rendered from the real LaTe
 npm run typecheck
 npm test
 RUN_LATEX_TESTS=1 npm test
-docker build -f workers/latex/Dockerfile -t career-latex:local . && RUN_DOCKER_TESTS=1 npm test -- tests/latex-sandbox.test.ts
+docker build -f workers/latex/Dockerfile -t jb-latex:local . && RUN_DOCKER_TESTS=1 npm test -- tests/latex-sandbox.test.ts
 npm run test:e2e:local
 npm run build
 ```

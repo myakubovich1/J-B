@@ -19,7 +19,7 @@ RUN_LATEX_TESTS=1 npm test -- tests/resume.test.ts
 Every production compile and every custom-template compile requires Docker. Build the compiler image on the dedicated worker host:
 
 ```sh
-docker build -f workers/latex/Dockerfile -t career-latex:local .
+docker build -f workers/latex/Dockerfile -t jb-latex:local .
 ```
 
 Set `LATEX_MODE=docker` and optionally `LATEX_DOCKER_IMAGE`. Image build warms its TeX package cache. Runtime (`sandboxRunArgs` in `src/lib/resume.ts`) uses a non-root UID matching the private temporary-directory owner (65532 when launched by root), an init process, no network, read-only root, all Linux capabilities dropped, no-new-privileges, 384 MB RAM without swap, one CPU, 64 PIDs, 256 open files, an 8 MB per-file write limit, a small `noexec` tmpfs, and a parent deadline (`LATEX_TIMEOUT_MS`, default 45 s, bounded 5–120 s). At the deadline the Docker CLI is killed and the named container force-removed; the file-size limit stops a template from flooding the worker disk with a giant log or PDF. Only the per-compilation private working directory is mounted. No application directory, production secrets, Docker socket, or home folder is mounted into the container. Tectonic's untrusted mode disables shell escape and restricts dangerous features; `--only-cached` prevents runtime dependency retrieval. Unknown packages or fonts fail clearly and must be added to `workers/latex/warmup.tex`, which is compiled at 10/11/12pt during the image build. Math fonts are cached per size, so the warmup exercises every size command; without that, built-in templates failed offline as soon as they printed a `$|$` separator.

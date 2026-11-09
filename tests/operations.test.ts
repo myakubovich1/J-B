@@ -202,11 +202,11 @@ describe("account data rights", () => {
       other = person("neighbor");
     addLocalUser(owner, ["d1", "d2", "d3"]);
     addLocalUser(other, ["n1"]);
-    jar.set("career_session", "d1");
+    jar.set("jb_session", "d1");
     await signOutEverywhere(owner);
     expect(sessions(owner)).toBe(0);
     expect(sessions(other)).toBe(1);
-    expect(jar.has("career_session")).toBe(false);
+    expect(jar.has("jb_session")).toBe(false);
   });
 });
 

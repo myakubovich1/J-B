@@ -4,7 +4,7 @@ import { collections } from "./contracts";
 import { appMode, dataDirectory, getStore, localDb, supabaseService } from "./store";
 import { deleteArtifact } from "./storage";
 
-const bucket = () => process.env.SUPABASE_STORAGE_BUCKET || "career-artifacts";
+const bucket = () => process.env.SUPABASE_STORAGE_BUCKET || "jb-artifacts";
 export type RetentionReport = {
   operational: Record<string, number>;
   usersScanned: number;

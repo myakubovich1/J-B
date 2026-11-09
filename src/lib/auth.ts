@@ -6,7 +6,7 @@ import { appMode, localDb, supabaseService } from "./store";
 import type { User } from "./contracts";
 
 const deriveKey = promisify(scrypt);
-const SESSION_COOKIE = "career_session";
+const SESSION_COOKIE = "jb_session";
 const SESSION_DAYS = 7;
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 export async function hashPassword(password: string): Promise<string> {

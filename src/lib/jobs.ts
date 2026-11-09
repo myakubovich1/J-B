@@ -145,7 +145,7 @@ export async function safeRead(
         {
           method: "GET",
           headers: {
-            "User-Agent": "CareerAgent/0.1 (+job application assistant)",
+            "User-Agent": "JB-career-agent (+https://jasteriskb.com)",
             Accept: "text/html,application/json",
             ...headers,
           },

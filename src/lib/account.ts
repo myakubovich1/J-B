@@ -8,7 +8,7 @@ import { disconnectIntegration } from "./integrations";
 import { customerRef } from "./alerts";
 import { HttpError } from "./http";
 
-const bucket = () => process.env.SUPABASE_STORAGE_BUCKET || "career-artifacts";
+const bucket = () => process.env.SUPABASE_STORAGE_BUCKET || "jb-artifacts";
 /** Subscription states in which Stripe may still charge the customer. */
 const BILLABLE = ["active", "trialing", "past_due", "unpaid"];
 
@@ -73,7 +73,7 @@ export async function signOutEverywhere(user: User): Promise<void> {
     return;
   }
   localDb().prepare("DELETE FROM local_sessions WHERE user_id=?").run(user.id);
-  (await cookies()).delete("career_session");
+  (await cookies()).delete("jb_session");
 }
 
 export type DeletionReport = {
@@ -149,7 +149,7 @@ export async function deleteAccount(user: User, confirmEmail: string): Promise<D
       db.exec("ROLLBACK");
       throw error;
     }
-    (await cookies()).delete("career_session");
+    (await cookies()).delete("jb_session");
   }
   console.info(
     JSON.stringify({

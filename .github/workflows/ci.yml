@@ -21,7 +21,7 @@ jobs:
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - run: npx playwright install --with-deps chromium
-      - run: docker build -f workers/latex/Dockerfile -t career-latex:local .
+      - run: docker build -f workers/latex/Dockerfile -t jb-latex:local .
       - run: npm run typecheck
       - run: npm test
         env:

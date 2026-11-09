@@ -14,7 +14,7 @@ grant all on public.users to service_role;
 create function public.sync_auth_user() returns trigger language plpgsql security definer set search_path='' as $$
 begin insert into public.users(id) values(new.id) on conflict do nothing; return new; end $$;
 revoke all on function public.sync_auth_user() from public,anon,authenticated;
-create trigger career_auth_user after insert on auth.users for each row execute function public.sync_auth_user();
+create trigger jb_auth_user after insert on auth.users for each row execute function public.sync_auth_user();
 insert into public.users(id) select id from auth.users on conflict do nothing;
 
 do $$
@@ -90,7 +90,7 @@ begin
   return new;
 end$$;
 revoke all on function public.sync_profile_inventory()from public,anon,authenticated;
-create trigger career_inventory after insert or update on public.candidate_profiles for each row execute function public.sync_profile_inventory();
+create trigger jb_inventory after insert or update on public.candidate_profiles for each row execute function public.sync_profile_inventory();
 
 create function public.sync_application_job()returns trigger language plpgsql security invoker set search_path='' as $$
 declare job_data jsonb=new.data->'job';job_id uuid;
@@ -101,7 +101,7 @@ begin
   return new;
 end$$;
 revoke all on function public.sync_application_job()from public,anon,authenticated;
-create trigger career_job_inventory after insert or update on public.applications for each row execute function public.sync_application_job();
+create trigger jb_job_inventory after insert or update on public.applications for each row execute function public.sync_application_job();
 
 -- Composite foreign keys prevent linking a record to another tenant's application.
 alter table public.application_events add column application_id uuid generated always as (nullif(data->>'applicationId','')::uuid) stored;
@@ -204,8 +204,8 @@ end $$;
 revoke all on function public.save_owned_record(text,uuid,uuid,jsonb),public.claim_agent_run(text,integer,integer),public.reserve_submission(uuid,uuid,integer),public.record_verified_submission(uuid,uuid),public.release_submission(uuid,uuid),public.consume_rate_limit(text,integer,integer),public.claim_webhook_event(text) from public,anon,authenticated;
 grant execute on function public.save_owned_record(text,uuid,uuid,jsonb),public.claim_agent_run(text,integer,integer),public.reserve_submission(uuid,uuid,integer),public.record_verified_submission(uuid,uuid),public.release_submission(uuid,uuid),public.consume_rate_limit(text,integer,integer),public.claim_webhook_event(text) to service_role;
 
-insert into storage.buckets(id,name,public,file_size_limit)values('career-artifacts','career-artifacts',false,15728640)on conflict(id)do nothing;
-create policy career_artifact_read on storage.objects for select to authenticated using(bucket_id='career-artifacts' and (storage.foldername(name))[1]=(select auth.uid())::text);
+insert into storage.buckets(id,name,public,file_size_limit)values('jb-artifacts','jb-artifacts',false,15728640)on conflict(id)do nothing;
+create policy jb_artifact_read on storage.objects for select to authenticated using(bucket_id='jb-artifacts' and (storage.foldername(name))[1]=(select auth.uid())::text);
 -- Artifact uploads are validated by server routes and written with the service role.
 
 -- OAuth secrets live in Supabase Vault, never in ordinary application rows. The
@@ -234,7 +234,7 @@ declare secret_id uuid;
 begin delete from private.integration_secrets where user_id=p_user_id and reference=p_reference returning vault_id into secret_id;if secret_id is not null then delete from vault.secrets where id=secret_id;end if;end $$;
 create function private.purge_vault_secret()returns trigger language plpgsql security definer set search_path='' as $$begin delete from vault.secrets where id=old.vault_id;return old;end$$;
 revoke all on function private.purge_vault_secret()from public,anon,authenticated;
-create trigger purge_career_vault_secret after delete on private.integration_secrets for each row execute function private.purge_vault_secret();
+create trigger purge_jb_vault_secret after delete on private.integration_secrets for each row execute function private.purge_vault_secret();
 revoke all on function private.set_integration_secret(uuid,text,text),private.get_integration_secret(uuid,uuid),private.delete_integration_secret(uuid,uuid) from public,anon,authenticated;
 grant execute on function private.set_integration_secret(uuid,text,text),private.get_integration_secret(uuid,uuid),private.delete_integration_secret(uuid,uuid) to service_role;
 create function public.set_integration_secret(p_user_id uuid,p_name text,p_value text)returns uuid language sql security invoker set search_path='' as $$select private.set_integration_secret(p_user_id,p_name,p_value)$$;

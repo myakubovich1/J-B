@@ -24,7 +24,7 @@ services:
         target: ${COMPILE_ROOT}
   compiler-image:
     profiles: [tools]
-    image: career-latex:local
+    image: jb-latex:local
     build:
       context: .
       dockerfile: workers/latex/Dockerfile

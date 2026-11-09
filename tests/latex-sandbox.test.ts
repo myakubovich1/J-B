@@ -17,10 +17,10 @@ import {
 import { defaultResumeSettings } from "../src/lib/resume-settings";
 
 // Executes the real Docker compiler. Build the image first:
-//   docker build -f workers/latex/Dockerfile -t career-latex:local .
+//   docker build -f workers/latex/Dockerfile -t jb-latex:local .
 // then run RUN_DOCKER_TESTS=1 npx vitest run tests/latex-sandbox.test.ts
 const run = promisify(execFile);
-const image = () => process.env.LATEX_DOCKER_IMAGE || "career-latex:local";
+const image = () => process.env.LATEX_DOCKER_IMAGE || "jb-latex:local";
 function chunk(type: string, data: Buffer): Buffer {
   const length = Buffer.alloc(4);
   length.writeUInt32BE(data.length);
@@ -88,14 +88,14 @@ async function leftoverContainers(): Promise<string> {
     "ps",
     "-a",
     "--filter",
-    "name=career-latex-",
+    "name=jb-latex-",
     "--format",
     "{{.Names}}",
   ]);
   return stdout.trim();
 }
 async function compileDirectories(): Promise<string[]> {
-  return (await readdir(os.tmpdir())).filter((name) => name.startsWith("career-latex-"));
+  return (await readdir(os.tmpdir())).filter((name) => name.startsWith("jb-latex-"));
 }
 
 describe.skipIf(process.env.RUN_DOCKER_TESTS !== "1")("isolated LaTeX compiler", () => {
@@ -296,7 +296,7 @@ describe.skipIf(process.env.RUN_DOCKER_TESTS !== "1")("isolated LaTeX compiler",
 
   it("cleans up every per-job directory", async () => {
     expect((await compileDirectories()).filter((name) => !before.includes(name))).toEqual([]);
-    const probe = path.join(os.tmpdir(), "career-latex-probe-check");
+    const probe = path.join(os.tmpdir(), "jb-latex-probe-check");
     await writeFile(probe, "").then(() => rm(probe));
   });
 });

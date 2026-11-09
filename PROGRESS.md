@@ -27,7 +27,7 @@ Locally verified internal alpha. **No gate is staging- or production-verified**:
 - Reusable brand components: `src/components/brand.tsx` (`Logo`, `Asterisk`, `AppIcon`). Favicon `src/app/icon.svg`, generated `apple-icon.tsx` and `opengraph-image.tsx` (fonts vendored in `src/app/_og/`, OFL).
 - Palette tokens on `:root` in `globals.css`. The legacy warm palette was converted programmatically (neutrals → slate, sage accent → teal, semantic reds/ambers kept). `--teal-ink` `#0A7270` is the text/button teal for AA contrast; `#06B6B4` is for marks and fills.
 - Legacy 8–11px body text was scaled to 12–14px. Georgia serif was replaced by Plus Jakarta Sans display type.
-- Internal identifiers kept for compatibility: database tables, env vars, migrations, `career-latex` Docker image name, `career-artifacts` bucket.
+- Remaining identifiers from the original "career-agent" name were renamed to `jb` on 2026-11-09 (nothing had been hosted, so there was no live data to migrate): Docker image `jb-latex` (plus its temp-directory and container-name prefixes), storage bucket `jb-artifacts`, session cookie `jb_session`, Stripe metadata key `jb_user_id`, the job-fetch User-Agent, and trigger/policy names in the foundation migration (edited in place). A local Supabase that already applied the old migration needs `supabase db reset`; local sessions sign in again. Unchanged by design: env var names (none carried a brand), the migration filename `20261030202557_career_foundation.sql`, and domain terms such as the `career_tracks` table and the "career agent" tagline.
 
 ## Product surface from the rebrand
 

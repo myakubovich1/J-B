@@ -18,6 +18,7 @@ Last updated: 2026-11-09 (UTC). Branch `main` of `~/Projects/jasteriskb` (the J*
 | Final build / audit / format | `npm run build`; `npm audit --audit-level=high`; `prettier --check` | build pass; 0 vulnerabilities; all files formatted except `src/app/globals.css`, which was already unformatted in the recovered baseline |
 | Docker sandbox | `RUN_DOCKER_TESTS=1 npx vitest run tests/latex-sandbox.test.ts` | 22 passed against image `career-latex:local` built from `workers/latex/Dockerfile` |
 | Post-merge (J*B rebrand into release work, 2026-11-09) | `RUN_LATEX_TESTS=1 RUN_DOCKER_TESTS=1 npx vitest run`; `npm run test:e2e:local`; `npm run build`; `prettier --check` | 182 passed, 1 skipped; E2E 10 passed; build pass; all files formatted (`globals.css` included); 0 vulnerabilities |
+| Identifier rename (`career-*` → `jb-*`, 2026-11-09) | `npm run typecheck`; `RUN_LATEX_TESTS=1 npx vitest run`; `docker build -f workers/latex/Dockerfile -t jb-latex:local .` then `RUN_DOCKER_TESTS=1 npx vitest run tests/latex-sandbox.test.ts`; `npm run build`; `npm run test:e2e:local` | typecheck pass; 160 passed + 22 Docker sandbox passed against `jb-latex:local` (1 live-Supabase test gated); build pass; E2E 10 passed |
 | Load rehearsal | `scripts/load-test.mjs` (see G-49) | 8 users: 8/8 in 68 s; 16 users: 16/16 in 142 s; 0 failures after fixes |
 | Crash recovery | scripted SIGKILL of the worker (see G-18) | Kill during preparation: reclaimed after 30 s lease, submitted once, billed once. Kill after submission latch: `submission_unverified`, not retried, not billed, reservation held, signed critical alert delivered to a local webhook receiver |
 
@@ -129,7 +130,7 @@ The original build brief was not available (not in the repository; a search of l
 
 ## Owner decisions required
 
-1. ~~Product name for release~~ — resolved 2026-11-09: **J*B**. The rebrand is merged into `main`; database tables, env vars, migrations, the `career-latex` image and the `career-artifacts` bucket keep their original names.
+1. ~~Product name for release~~ — resolved 2026-11-09: **J*B**. The rebrand is merged into `main`, and the leftover `career-*` identifiers (Docker image `jb-latex`, bucket `jb-artifacts`, cookie `jb_session`, Stripe metadata `jb_user_id`, migration trigger/policy names) were renamed to `jb` the same day.
 2. Hosting: Supabase plan (PITR/backups), web host (Vercel vs container), Linux worker host, regions.
 3. Billing policy: prices, plan limits, trials, payment-failure grace period, refunds, and whether deletion should cancel subscriptions automatically (currently it refuses until the customer cancels).
 4. Data retention periods for evidence, resumes, applications, and logs.

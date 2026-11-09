@@ -723,7 +723,7 @@ export async function compileLatex(
       throw new Error("Supporting images require an isolated custom-template compile.");
     validateTemplateAssets(assets);
   }
-  const directory = await mkdtemp(path.join(os.tmpdir(), "career-latex-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "jb-latex-"));
   const filename = path.join(directory, "resume.tex");
   let sandboxName: string | null = null;
   try {
@@ -751,13 +751,13 @@ export async function compileLatex(
             await chown(path.join(directory, "assets", asset.name), uid, gid);
         }
       }
-      sandboxName = `career-latex-${crypto.randomUUID()}`;
+      sandboxName = `jb-latex-${crypto.randomUUID()}`;
       try {
         const result = await run(
           "docker",
           [
             ...sandboxRunArgs({ name: sandboxName, directory, uid, gid }),
-            process.env.LATEX_DOCKER_IMAGE || "career-latex:local",
+            process.env.LATEX_DOCKER_IMAGE || "jb-latex:local",
             "resume.tex",
           ],
           // SIGTERM only reaches the container via the CLI's signal proxy, and the CLI keeps
@@ -795,7 +795,7 @@ export async function compileLatex(
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT")
           throw new Error(
-            "LaTeX compiler unavailable. Install Tectonic for trusted local templates, or build the isolated career-latex Docker worker.",
+            "LaTeX compiler unavailable. Install Tectonic for trusted local templates, or build the isolated jb-latex Docker worker.",
           );
         throw new Error(
           `LaTeX compilation failed: ${error instanceof Error ? error.message.slice(0, 1500) : "compiler error"}`,

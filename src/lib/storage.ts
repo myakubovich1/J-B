@@ -2,7 +2,7 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { appMode, dataDirectory, supabaseService } from "./store";
 
-const bucket = () => process.env.SUPABASE_STORAGE_BUCKET || "career-artifacts";
+const bucket = () => process.env.SUPABASE_STORAGE_BUCKET || "jb-artifacts";
 function validUser(userId: string) {
   if (!/^[a-zA-Z0-9_-]{1,100}$/.test(userId)) throw new Error("Invalid artifact owner");
 }
